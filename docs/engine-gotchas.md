@@ -122,9 +122,11 @@ gotcha, what to do instead, and a reference implementation.
 
 ## UI config and data modules
 
-- **`select` uiConfig item values must be strings.** Store the param as a
-  string union (`'1' | '2' | '3'`) and `Number()` it at the use site (see
-  Bone Picked Clean's spend threshold).
+- **`select` uiConfig item values must be NON-EMPTY strings.** Store the
+  param as a string union (`'1' | '2' | '3'`) and `Number()` it at the use
+  site (see Bone Picked Clean's spend threshold). Radix Select throws on
+  `value: ''` the moment the panel renders — use a sentinel like `'none'`
+  for a "nothing selected" option (see TF Supercharge, Clever Genome).
 
 - **`UnitList` entries are flat keys or tuples — match the existing shape
   when appending**, and remember `unwrapUnitListKeys` decides tuple-ness

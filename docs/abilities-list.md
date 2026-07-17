@@ -279,7 +279,7 @@ Each TF faction carries its own logo (traced to SVG from the bern/ti4lookup PNGs
 
 - [x] **Smothering Presence** — Opponent units lose ALL unit abilities (structure presence/adjacency is asserted by enabling the card — not derivable in a single-system calculator).
 - [x] **Proxima Targeting VI** — Cancel 1 hit per Bombardment roll against you; optional Bombardment 7(x3) against opponent AND self each ground round. Distinct from the TE Last Bastion card (which scales with Galvanize and rolls 8s).
-- [x] **Supercharge** — +2 to ONE chosen unit's combat rolls every round (the TI4 technology is +1 to all rolls for one round, exhaust-based).
+- [x] **Supercharge** — +2 to ONE unit's combat rolls every round (the TI4 technology is +1 to all rolls for one round, exhaust-based). Target is a Gravleash-style ordered priority list per combat mode — the unit is re-chosen each roll, so the bonus falls through to the next type when the preferred one has died.
 - [x] **Temporal Command Suite** — `uses` = command tokens spent re-readying the chosen genome; extra genome uses are pre-granted at PREPARE (math-equivalent to readying after each exhaust). The TI4 version readies agents.
 
 ### Genomes (bespoke)
