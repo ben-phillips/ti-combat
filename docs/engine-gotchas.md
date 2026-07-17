@@ -51,6 +51,14 @@ gotcha, what to do instead, and a reference implementation.
   phase drivers (AFB, Space Cannon, Bombardment, Retreat, Fleet Pool,
   Capacity) — never hide it, even for Twilight's Fall.
 
+- **Winning SPACE combat requires participating units.** `_postAssignHits`
+  uses `hasAnyUnits` for non-combat metas (so SCO/AFB wipes end things),
+  but a would-be winner whose remaining units are all non-participating
+  (ferried ground forces, structures) is downgraded to 'draw' in SPACE
+  mode — only ship-mechs (Eidolon Maximum, Starlancer XI with ships
+  fielded) win via participation. Combat-round wipes and GROUND mode are
+  untouched (see `tests/engine/space-combat-winner-participation.test.ts`).
+
 ## Reconcile and config
 
 - **`resetSettingsToBase` intentionally does NOT re-apply
