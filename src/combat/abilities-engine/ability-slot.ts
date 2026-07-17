@@ -51,11 +51,11 @@ export const SLOT_DISPLAY: Record<AbilitySlot, SlotDisplay> = {
   FACTION_FLAGSHIP: { category: 'FACTION', subcategory: 'FLAGSHIP' },
   FACTION_MECH: { category: 'FACTION', subcategory: 'MECH' },
   FACTION_UNIT: { category: 'FACTION', subcategory: 'UNIT' },
-  TF_ABILITY: { category: 'ABILITIES' },
-  TF_GENOME: { category: 'GENOMES' },
-  TF_PARADIGM: { category: 'PARADIGMS' },
+  TF_ABILITY: { category: 'ABILITY' },
+  TF_GENOME: { category: 'GENOME' },
+  TF_PARADIGM: { category: 'PARADIGM' },
   TF_ACTION_CARD: { category: 'ACTION CARD' },
-  TF_UNIT_UPGRADE: { category: 'UNIT UPGRADES' },
+  TF_UNIT_UPGRADE: { category: 'UNIT UPGRADE' },
   OTHER: { category: 'OTHER' },
 }
 
