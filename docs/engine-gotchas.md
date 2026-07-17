@@ -59,6 +59,14 @@ gotcha, what to do instead, and a reference implementation.
   participation change to survive into the engine run, restore it at
   runtime in its PREPARE (see Hel-Titan's `onPrepare`).
 
+- **`declareParamChange` additions to DERIVED settings groups survive only
+  because `resetBaseGroups` re-applies them after `onParamSet`.** The
+  derivation (`ships` → `spaceCombatParticipating`, etc.) recomputes derived
+  groups from the base groups, clobbering anything pushed into them earlier
+  in the pass. Base-group targets (Hel-Titan's `groundForces`) never hit
+  this; derived-group targets (Starlancer XI's `spaceCombatParticipating`)
+  rely on the post-derivation re-apply — don't remove it.
+
 - **`declareParam` sourced params sync only at reconcile.** A runtime
   `updateAbilityConfig` to a source list (e.g.
   `SETTINGS.spaceCombatParticipating`) does not propagate to params sourced
@@ -79,9 +87,12 @@ gotcha, what to do instead, and a reference implementation.
   from `nonFighterShips` / `groundForces`). A unit added to combat outside
   those lists silently cannot sustain in that mode.
 
-- **Hit-assignment order: the END of `UNIT_PRIORITY.*UnitPriority` takes
-  hits first.** Fighters sit last by default and die first. Append to the
-  end to make a unit the default hit-soaker; prepend to protect it.
+- **Hit-assignment order: the FRONT of `UNIT_PRIORITY.*UnitPriority` takes
+  hits first.** The default list is worth-ascending, so fighters sit FIRST
+  and die first. Prepend to make a unit the default hit-soaker; append to
+  protect it. (Verified empirically — an earlier version of this entry had
+  it backwards. Same direction in phase-priority overrides: GLS's
+  `fightersLast` moves fighters to the end to PROTECT them.)
 
 ## Dice-math kernel
 

@@ -45,6 +45,52 @@ describe('TF_STARLANCER_XI', () => {
     expect(pool.attacker).toContainDice('CRUISER', [7, 1])
   })
 
+  it('mech sits in the assign-hits order at its worth slot by default', () => {
+    // Sustain disabled so pure assignment order is observable: the fighter
+    // (front of the worth-asc list) soaks before the mech.
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'IL_NA_VIROSET',
+        units: { FIGHTER: 1, CRUISER: 1, MECH: 1 },
+        abilities: { SUSTAIN_DAMAGE: { isEnabled: false } },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 2 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 1, defender: 0 })
+
+    expect(t.attacker.units.FIGHTER).toBeUndefined()
+    expect(t.attacker.units.CRUISER).toHaveLength(1)
+    expect(t.attacker.units.MECH).toHaveLength(1)
+  })
+
+  it('dragging MECH to the front sacrifices mechs in space first', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'IL_NA_VIROSET',
+        units: { FIGHTER: 1, CRUISER: 1, MECH: 1 },
+        abilities: {
+          SUSTAIN_DAMAGE: { isEnabled: false },
+          // MECH is a normal reorderable entry — front takes hits first
+          UNIT_PRIORITY: {
+            spaceUnitPriority: [['MECH'], ['FIGHTER'], ['CRUISER']],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 2 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 1, defender: 0 })
+
+    expect(t.attacker.units.MECH).toBeUndefined()
+    expect(t.attacker.units.FIGHTER).toHaveLength(1)
+    expect(t.attacker.units.CRUISER).toHaveLength(1)
+  })
+
   it('with no ships fielded, the mechs stay on the ground — no space combat', () => {
     const t = combatTest({
       mode: 'SPACE',

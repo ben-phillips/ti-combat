@@ -32,11 +32,16 @@ export const sustainDamage: Ability<Params> = {
   params: {
     isEnabled: true,
     uses: Infinity,
+    // Sourced from PARTICIPATING units (minus fighters) rather than
+    // nonFighterShips so non-ship space combatants (Starlancer XI mechs)
+    // appear in the panel and the allow-list. For every normal faction
+    // spaceCombatParticipating === ships, so the list is identical to the
+    // old nonFighterShips source.
     spacePriority: declareParam<UnitList<boolean>>({
       default: [],
-      source: 'nonFighterShips',
+      source: 'spaceCombatParticipating',
       defaultItemValue: true,
-      filter: { combatMode: 'SPACE' },
+      filter: { exclude: ['FIGHTER'], combatMode: 'SPACE' },
     }),
     groundPriority: declareParam<UnitList<boolean>>({
       default: [],

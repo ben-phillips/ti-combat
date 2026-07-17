@@ -51,6 +51,16 @@ export const starlancerXI: Ability<Params> = {
   // The mech's printed text — always on while mechs are fielded.
   readOnly: true,
   headerUI: 'isEnabled',
+  // Surface MECH in the space Unit Priority panel (Hel-Titan pattern): the
+  // reconcile-time participation change makes MECH a draggable entry in
+  // `UNIT_PRIORITY.spaceUnitPriority`, defaulting to its worth slot (after
+  // fighters/destroyers, before cruisers). Drag it to the FRONT to sacrifice
+  // mechs in space first, or to the END to save them for the ground fight.
+  // `resetSettingsToBase` drops this before the engine run; the PREPARE
+  // invoke below restores participation at runtime.
+  declareParamChange: () => [
+    { key: 'spaceCombatParticipating', value: 'MECH' },
+  ],
   uiConfig: [
     {
       key: 'anomalies',
@@ -71,17 +81,20 @@ export const starlancerXI: Ability<Params> = {
           spaceCombatParticipating: (current: UnitBaseType[]) =>
             current.includes('MECH') ? current : [...current, 'MECH'],
         })
-        // Sustain's space allow-list sources from nonFighterShips, which the
-        // mech is deliberately NOT part of — let it use Sustain Damage in
-        // space combat anyway.
+        // Sustain's space allow-list normally gains MECH at reconcile (its
+        // source is spaceCombatParticipating, extended by the
+        // declareParamChange above) — this is the runtime fallback.
         ctx.api.own.updateAbilityConfig('SUSTAIN_DAMAGE', {
           spacePriority: (current: UnitList<boolean>) =>
             current.some(([key]) => key === 'MECH')
               ? current
               : [...current, ['MECH', true]],
         })
-        // Hit-assignment order: append the mech at the end (where fighters
-        // sit by default). The user can still reorder in the panel.
+        // Hit-assignment fallback: the reconcile-time declareParamChange
+        // normally puts MECH into the priority list already (and the user
+        // may have reordered it — respected via the includes check below).
+        // If it's somehow absent, append at the END = most protected (the
+        // FRONT of the list takes hits first).
         ctx.api.own.updateAbilityConfig('UNIT_PRIORITY', {
           spaceUnitPriority: (current: UnitList) => {
             const keys = current.map(e => (Array.isArray(e) ? e[0] : e))

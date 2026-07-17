@@ -219,6 +219,24 @@ function resetBaseGroups(
         settings.groundForces,
       )
     }
+
+    // onParamSet recomputes DERIVED groups (spaceCombatParticipating,
+    // groundCombatParticipating, ...) from the base groups, clobbering
+    // declared additions that target a derived group (e.g. Starlancer XI
+    // adding MECH to spaceCombatParticipating). Re-apply the declared
+    // changes on top — base-group additions are already present, so the
+    // includes check makes them no-ops.
+    const postDeriveChanges = collectParamChanges(
+      sideAbilities,
+      config[side],
+      settings,
+    )
+    for (const change of postDeriveChanges) {
+      const group = settings[change.key]
+      if (!group.includes(change.value)) {
+        group.push(change.value)
+      }
+    }
   }
 }
 

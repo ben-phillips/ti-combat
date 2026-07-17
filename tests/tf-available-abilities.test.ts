@@ -107,6 +107,31 @@ describe("Twilight's Fall available abilities", () => {
     expect(t.dicePool()?.defender?.PDS).toBeUndefined()
   })
 
+  it('Il Na Viroset mechs appear in the space assign-hits and sustain lists', () => {
+    const setup = new CombatSetup()
+    setup.setSystem('TWILIGHTS_FALL')
+    setup.setFaction('attacker', 'IL_NA_VIROSET')
+
+    const config = setup.abilities.attacker
+    const priorityKeys = (
+      config.UNIT_PRIORITY.spaceUnitPriority as [string][]
+    ).map(e => (Array.isArray(e) ? e[0] : e))
+    expect(priorityKeys).toContain('MECH')
+
+    const sustainKeys = (
+      config.SUSTAIN_DAMAGE.spacePriority as [string, boolean][]
+    ).map(([k]) => k)
+    expect(sustainKeys).toContain('MECH')
+
+    // Sanity: a plain TF faction gets neither
+    setup.setFaction('attacker', 'AVARICE_REX')
+    const plain = setup.abilities.attacker
+    const plainPriority = (
+      plain.UNIT_PRIORITY.spaceUnitPriority as [string][]
+    ).map(e => (Array.isArray(e) ? e[0] : e))
+    expect(plainPriority).not.toContain('MECH')
+  })
+
   it('every TF faction carries its own logo', () => {
     for (const [key, faction] of Object.entries(twilightsFallFactions)) {
       expect(faction.icon, `${key} is missing an icon`).toEqual(
