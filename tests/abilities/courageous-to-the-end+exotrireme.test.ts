@@ -17,7 +17,7 @@ describe.forEachSide('COURAGEOUS_TO_THE_END + EXOTRIREME', () => {
         units: { DREADNOUGHT: 1, CRUISER: 1 },
         upgrades: ['DREADNOUGHT'],
         abilities: {
-          EXOTRIREME: true,
+          EXOTRIREME: { isEnabled: true, uses: 1 },
           COURAGEOUS_TO_THE_END: true,
         },
       },

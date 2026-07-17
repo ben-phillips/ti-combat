@@ -29,7 +29,11 @@ import {
   createTfUnitUpgrade,
   type TfUnitUpgradeConfig,
 } from './create-tf-unit-upgrade'
-import { exotriremeSelfDestructInvoke } from './exotrireme'
+import {
+  exotriremeParams,
+  exotriremeSelfDestructInvoke,
+  exotriremeUiConfig,
+} from './exotrireme'
 import { helTitanDeclareParamChange, helTitanOnPrepare } from './hel-titan'
 import { linkshipRetreatInvoke } from './linkship-retreat'
 import { strikeWingAlphaAfbInvoke } from './strike-wing-alpha'
@@ -146,14 +150,8 @@ export const TF_UNIT_UPGRADE_CONFIGS: readonly TfUnitUpgradeConfig[] = [
     sustain: true,
     bombardment: [4, 2],
     directHitImmune: true,
-    extraParams: { selfDestruct: false, _exoDone: false },
-    uiConfig: () => [
-      {
-        key: 'selfDestruct',
-        label: 'Self-destruct after a round to destroy up to 2 ships',
-        type: 'checkbox',
-      },
-    ],
+    extraParams: exotriremeParams,
+    uiConfig: exotriremeUiConfig,
     invokes: [exotriremeSelfDestructInvoke],
   },
   {

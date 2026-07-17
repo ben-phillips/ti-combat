@@ -28,7 +28,7 @@ describe('TF unit abilities', () => {
         faction: 'AVARICE_REX',
         units: { DREADNOUGHT: 1 },
         abilities: {
-          TF_UPGRADE_EXOTRIREME: { isEnabled: true, selfDestruct: true },
+          TF_UPGRADE_EXOTRIREME: { isEnabled: true, uses: 1 },
         },
       },
       defender: { faction: 'AVARICE_REX', units: { CRUISER: 3 } },
@@ -39,6 +39,70 @@ describe('TF unit abilities', () => {
 
     expect(t.attacker.units.DREADNOUGHT).toBeUndefined()
     expect(t.defender.units.CRUISER).toHaveLength(1)
+  })
+
+  it('Exotrireme self-destruct fires once per use after the same round', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { DREADNOUGHT: 2, CRUISER: 1 },
+        abilities: {
+          TF_UPGRADE_EXOTRIREME: { isEnabled: true, uses: 2 },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 5 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 0, defender: 0 })
+
+    // Both dreadnoughts sacrifice, each destroying 2 cruisers (4 total)
+    expect(t.attacker.units.DREADNOUGHT).toBeUndefined()
+    expect(t.defender.units.CRUISER).toHaveLength(1)
+  })
+
+  it('Exotrireme self-destruct is limited by its uses', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { DREADNOUGHT: 2, CRUISER: 1 },
+        abilities: {
+          TF_UPGRADE_EXOTRIREME: { isEnabled: true, uses: 1 },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 5 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 0, defender: 0 })
+
+    // Only one dreadnought sacrifices — the second use isn't available
+    expect(t.attacker.units.DREADNOUGHT).toHaveLength(1)
+    expect(t.defender.units.CRUISER).toHaveLength(3)
+  })
+
+  it('Exotrireme stat upgrade applies even with 0 uses (self-destruct off)', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { DREADNOUGHT: 1 },
+        abilities: { TF_UPGRADE_EXOTRIREME: true },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 3 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 0, defender: 0 })
+
+    // Upgraded combat value (4) instead of the base dreadnought's 5
+    expect(t.dicePool().attacker).toContainDice('DREADNOUGHT', [4, 1])
+
+    // No sacrifice with the default uses: 0
+    expect(t.attacker.units.DREADNOUGHT).toHaveLength(1)
+    expect(t.defender.units.CRUISER).toHaveLength(3)
   })
 
   it('Radiant Aur mech repairs a damaged mech at the start of a ground round', () => {

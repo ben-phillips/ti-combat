@@ -10,7 +10,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 1, CRUISER: 1 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -33,7 +33,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 1, CRUISER: 1 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -56,7 +56,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 1, CRUISER: 1 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -81,7 +81,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 2, CRUISER: 1 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 2 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -104,7 +104,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 2, CRUISER: 2 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 2 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -126,7 +126,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { INFANTRY: 2 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -146,7 +146,7 @@ describe.forEachSide('EXOTRIREME', () => {
       attacker: {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 1, CRUISER: 1 },
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',

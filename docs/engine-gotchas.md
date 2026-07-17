@@ -33,6 +33,12 @@ gotcha, what to do instead, and a reference implementation.
   sun upgrades stripping Planetary Shield 2RAM-style in
   `create-tf-unit-upgrade.ts`).
 
+- **Finite `uses` bills and gates EVERY non-system invoke — including a
+  card's PREPARE.** A stat-upgrade card with a finite-uses active ability
+  (TF Exotrireme) must mark its PREPARE `system: true`, or the stat
+  application burns a use at PREPARE and stops applying entirely once
+  `uses` reaches 0 (see `create-tf-unit-upgrade.ts`).
+
 - **System invokes skip dispatch-time `uses` gating.** Invokes on timings
   like `REROLL_DICE_ROLL` (whose billing is deferred to the kernel) fire
   even at `uses: 0` unless you add

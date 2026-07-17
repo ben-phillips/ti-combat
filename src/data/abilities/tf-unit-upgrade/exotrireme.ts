@@ -1,43 +1,91 @@
-import type { Ability, AbilityReadContext } from '@/combat'
-import { UNIT_WORTH } from '@/constants/units'
-import type { UnitId, UnitType } from '@/types'
+import { type Ability, declareParam } from '@/combat'
+import { UNIT_LIMITS } from '@/constants/units'
+import type { UnitList } from '@/types'
 
-// Opponent ships, highest-worth first — the best targets for Exotrireme's
-// self-destruct.
-function enemyShipsByWorth(ctx: AbilityReadContext): UnitId[] {
-  const { ships } = ctx.api.opponent.getAbilityConfig('SETTINGS')
-  const scored: { id: UnitId; worth: number }[] = []
-  for (const shipType of ships) {
-    for (const id of ctx.api.opponent.getUnits(shipType as UnitType, {
-      includeVariants: true,
-    })) {
-      const base = ctx.api.opponent.getUnitBaseType(id)
-      scored.push({ id, worth: base ? (UNIT_WORTH[base] ?? 0) : 0 })
-    }
-  }
-  return scored.sort((a, b) => b.worth - a.worth).map(x => x.id)
+// After a round of space combat, destroy 1 of your dreadnoughts (picked by
+// sacrifice priority) to destroy up to 2 of the opponent's ships (picked by
+// target priority). Opt-in via the card's `uses` counter — 0 by default, one
+// use per sacrifice. All affordable sacrifices resolve after the same round
+// (one per dreadnought), matching the Sardakk N'orr Exotrireme II.
+export const exotriremeParams = {
+  uses: 0,
+  sacrificePriority: declareParam({
+    default: [] as UnitList<boolean>,
+    source: 'ships',
+    side: 'own',
+    defaultItemValue: true,
+    filter: { include: ['DREADNOUGHT'], combatMode: 'SPACE' },
+  }),
+  targetPriority: declareParam<UnitList<boolean>>({
+    default: [],
+    source: 'ships',
+    side: 'opponent',
+    sort: 'worth-desc',
+    defaultItemValue: true,
+    filter: { combatMode: 'SPACE' },
+  }),
 }
 
-// After a round of space combat, sacrifice one Exotrireme dreadnought to destroy
-// up to 2 of the opponent's ships. Opt-in (the `selfDestruct` checkbox) and
-// once per combat (`_exoDone`).
 export const exotriremeSelfDestructInvoke: Ability['invoke'][number] = {
   timing: 'AFTER_COMBAT_ROUND',
   context: 'SPACE_COMBAT',
-  isCallable: (params, ctx) => {
-    if (!params.selfDestruct || params._exoDone) return false
-    const hasDread =
-      ctx.api.own.getUnits('DREADNOUGHT', { includeVariants: true }).length > 0
-    if (!hasDread) return false
-    return enemyShipsByWorth(ctx).length > 0
-  },
-  call: ctx => {
-    ctx.api.own.updateAbilityConfig({ _exoDone: true })
-    const targets = enemyShipsByWorth(ctx).slice(0, 2)
-    if (targets.length > 0) ctx.api.opponent.destroyUnits(targets)
-    const [dread] = ctx.api.own.getUnits('DREADNOUGHT', {
-      includeVariants: true,
-    })
-    if (dread) ctx.api.own.destroyUnits(dread)
+  isCallable: (params, ctx) =>
+    ctx.api.own.findUnitByPriority(
+      ctx.utils.getFlat(params.sacrificePriority),
+      { includeVariants: false },
+    ) !== undefined &&
+    ctx.api.opponent.findUnitByPriority(
+      ctx.utils.getFlat(params.targetPriority),
+      { includeVariants: false },
+    ) !== undefined,
+  call: (ctx, params) => {
+    // The engine bills one use for this invocation; further same-round
+    // sacrifices are billed here via `updateAbilityConfig` (the engine's
+    // decrement reads the updated value, so it isn't clobbered).
+    const usesLeft = typeof params.uses === 'number' ? params.uses : Infinity
+    let spent = 0
+    while (spent < usesLeft) {
+      const sacrifice = ctx.api.own.findUnitByPriority(
+        ctx.utils.getFlat(params.sacrificePriority),
+        { includeVariants: false },
+      )
+      const targets = ctx.api.opponent.findUnitByPriority(
+        ctx.utils.getFlat(params.targetPriority),
+        { includeVariants: false, amount: 2 },
+      )
+      if (sacrifice === undefined || targets.length === 0) break
+      ctx.api.opponent.destroyUnits(targets)
+      ctx.api.own.destroyUnits(sacrifice)
+      spent += 1
+    }
+    if (spent > 1 && isFinite(usesLeft)) {
+      ctx.api.own.updateAbilityConfig({ uses: usesLeft - (spent - 1) })
+    }
   },
 }
+
+export const exotriremeUiConfig: Ability['uiConfig'] = ctx => [
+  {
+    key: 'uses',
+    label: 'Uses',
+    type: 'number',
+    min: 0,
+    max: UNIT_LIMITS.DREADNOUGHT,
+  },
+  {
+    key: 'sacrificePriority',
+    label: 'Sacrifice Priority',
+    type: 'unit-list',
+    mode: 'checkbox',
+    sortable: true,
+    items: ctx.api.own.getUnitVariantsOptions('sacrificePriority'),
+  },
+  {
+    key: 'targetPriority',
+    label: 'Target Priority',
+    type: 'unit-list',
+    mode: 'checkbox',
+    sortable: true,
+    items: ctx.api.opponent.getUnitVariantsOptions('targetPriority'),
+  },
+]

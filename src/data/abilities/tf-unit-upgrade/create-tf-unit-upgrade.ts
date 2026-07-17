@@ -51,8 +51,8 @@ export interface TfUnitUpgradeConfig {
   // Extra ability invokes beyond the PREPARE stat application (e.g. Linkship's
   // WHEN_RETREAT destroy). They fire only while the upgrade is enabled.
   invokes?: Ability['invoke']
-  // Extra params merged onto { isEnabled, uses } — e.g. Exotrireme's opt-in
-  // self-destruct checkbox.
+  // Extra params merged onto { isEnabled, uses } — e.g. Exotrireme's
+  // sacrifice/target priorities (and its finite `uses` override).
   extraParams?: Record<string, unknown>
   uiConfig?: Ability['uiConfig']
   declareParamChange?: Ability['declareParamChange']
@@ -105,6 +105,11 @@ export function createTfUnitUpgrade(cfg: TfUnitUpgradeConfig): Ability {
     invoke: [
       {
         timing: 'PREPARE',
+        // The stat application must not participate in `uses` accounting:
+        // a card with a finite-uses active ability (e.g. Exotrireme's
+        // self-destruct) would otherwise burn a use at PREPARE and lose its
+        // stat upgrade entirely once `uses` hits 0.
+        system: true,
         call: (ctx: AbilityCallContext) => {
           if (cfg.apply) cfg.apply(ctx)
           else if (stats) ctx.api.own.modifyUnitType(cfg.unitType, stats)
