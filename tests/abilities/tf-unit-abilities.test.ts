@@ -83,6 +83,38 @@ describe('TF unit abilities', () => {
     expect(t.defender.units.CRUISER).toHaveLength(3)
   })
 
+  it('Exotrireme self-destruct honors a custom target priority order', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { DREADNOUGHT: 1 },
+        abilities: {
+          TF_UPGRADE_EXOTRIREME: {
+            isEnabled: true,
+            uses: 1,
+            targetPriority: [
+              ['DESTROYER', true],
+              ['CARRIER', true],
+            ],
+          },
+        },
+      },
+      defender: {
+        faction: 'AVARICE_REX',
+        units: { CARRIER: 1, DESTROYER: 2 },
+      },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 0, defender: 0 })
+
+    // Default worth-desc would take the carrier first; the custom order
+    // spends both destroys on destroyers instead.
+    expect(t.defender.units.DESTROYER).toBeUndefined()
+    expect(t.defender.units.CARRIER).toHaveLength(1)
+  })
+
   it('Exotrireme stat upgrade applies even with 0 uses (self-destruct off)', () => {
     const t = combatTest({
       mode: 'SPACE',

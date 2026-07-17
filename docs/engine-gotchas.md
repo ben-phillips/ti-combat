@@ -5,6 +5,11 @@ harness. Each of these was discovered the hard way while debugging; check
 here before re-deriving behavior empirically. Keep entries short: the
 gotcha, what to do instead, and a reference implementation.
 
+Statically checkable invariants (invoke identity/dedup rules, uiConfig
+shape, finite number-input defaults, select option values) are enforced by
+`tests/ability-invariants.test.ts` — when adding a gotcha of that kind, add
+a check there too.
+
 ## Ability engine
 
 - **One invoke per (ability, timing).** A second invoke with the same timing
