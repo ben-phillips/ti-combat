@@ -661,6 +661,23 @@ export class CombatState {
     else if (attackerOut) winner = 'defender'
     else if (defenderOut) winner = 'attacker'
 
+    // Winning space combat requires space-combat participants. A side whose
+    // only remaining units merely share the area (ferried ground forces,
+    // structures) doesn't take the win when the opponent is absent or wiped
+    // in a unit-ability phase — the combat ends with no winner instead.
+    // Participation is SETTINGS-driven, so ship-mechs (Eidolon Maximum,
+    // Starlancer XI while ships are fielded) still win. Combat-round wipes
+    // are unaffected: the surviving side has participants by construction.
+    // Mirrors `syncWinnerSide`, which already re-derives winners from
+    // participating units only.
+    if (
+      d.combatMode === 'SPACE' &&
+      (winner === 'attacker' || winner === 'defender') &&
+      !CombatSideState.hasParticipatingUnits(d[winner])
+    ) {
+      winner = 'draw'
+    }
+
     if (winner !== undefined) this._triggerCompletion(phase, winner)
   }
 

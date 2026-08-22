@@ -1,6 +1,14 @@
 import { SHARED_UNIT_ABILITY_KEYS } from '@/data/abilities/general'
 import factions from '@/data/faction'
-import type { CombatSide, Faction, FactionKey, UnitBaseType } from '@/types'
+import { TF_SHARED_REGISTERED } from '@/data/faction/twilights-fall-abilities'
+import type {
+  CombatSide,
+  Faction,
+  FactionKey,
+  GameSystem,
+  UnitBaseType,
+} from '@/types'
+import { getFactionSystem } from '@/utils/get-faction-system'
 import { getFactionUnitConfig } from '@/utils/get-faction-unit-config'
 import { getEffectiveStats } from '@/utils/get-simulation-units'
 
@@ -163,6 +171,9 @@ const allAbilitiesForLookup: Ability[] = [
   ...baseRegistered.map(r => r.ability),
   ...allUnitAbilities,
   ...allFactionAbilities,
+  // The Twilight's Fall shared pool — bespoke keys (TF_*) live nowhere else,
+  // and without them URL/refresh validation drops any saved TF card config.
+  ...TF_SHARED_REGISTERED.map(r => r.ability),
 ]
 
 export function getAllAbilities(): Ability[] {
@@ -177,6 +188,28 @@ const NEUTRAL_HIDDEN_SLOTS: ReadonlySet<AbilitySlot> = new Set<AbilitySlot>([
   'RELIC',
   'PROMISSORY',
 ])
+
+// Twilight's Fall has none of TI4's shared decks — no agendas, promissory
+// notes, TI4 technologies, action cards, relics, agents, or commanders. Only
+// general/advanced combat mechanics and terrain effects carry over; TF's own
+// shared ability pool is layered in separately.
+//
+// NOTE: 'ADVANCED' must NOT be hidden — those are the phase drivers (AFB,
+// Space Cannon, Bombardment, Retreat, Fleet Pool, Capacity, Ability Order),
+// which are universal combat mechanics the engine needs to run every phase.
+const TF_HIDDEN_SLOTS: ReadonlySet<AbilitySlot> = new Set<AbilitySlot>([
+  'AGENDA',
+  'TECHNOLOGY',
+  'ACTION_CARD',
+  'COMMANDER',
+  'AGENT',
+  'PROMISSORY',
+  'OTHER',
+])
+
+// Individual cards that survive the slot filter but reference mechanics
+// Twilight's Fall doesn't have (there is no Galvanize in TF).
+const TF_HIDDEN_KEYS: ReadonlySet<string> = new Set(['PRE_GALVANIZED'])
 
 function collectUnitAbilities(
   faction: Faction,
@@ -280,8 +313,16 @@ export function getAvailableAbilities(
   side: CombatSide,
   factionKey: FactionKey,
   upgradedTypes?: ReadonlySet<UnitBaseType>,
+  system?: GameSystem,
 ): RegisteredAbility[] {
   const isNeutral = factionKey === 'NEUTRAL'
+  const isTwilightsFall = getFactionSystem(factionKey) === 'TWILIGHTS_FALL'
+  // Neutral belongs to every system, so its own `system` field can't tell TF
+  // apart — callers pass the session's active system. In a TF session the
+  // neutral panel matches the TF layout: no OTHER catch-all, no Galvanize,
+  // and the TI4 agent pool is replaced by the TF genome deck (genomes are
+  // TF's agent-style exhaust effects).
+  const isTfNeutral = isNeutral && system === 'TWILIGHTS_FALL'
 
   const faction = factions[factionKey]
   const ownedKeys = getFactionOwnedAbilityKeys(factionKey)
@@ -289,8 +330,15 @@ export function getAvailableAbilities(
   const base: RegisteredAbility[] = baseRegistered.filter(reg => {
     const a = reg.ability
     if (a.side && a.side !== side) return false
+    if (isTwilightsFall) {
+      return !TF_HIDDEN_SLOTS.has(reg.slot) && !TF_HIDDEN_KEYS.has(a.key)
+    }
     if (isNeutral) {
       if (NEUTRAL_HIDDEN_SLOTS.has(reg.slot)) return false
+      if (isTfNeutral) {
+        if (reg.slot === 'AGENT' || reg.slot === 'OTHER') return false
+        if (TF_HIDDEN_KEYS.has(a.key)) return false
+      }
       if (a.key === 'FLEET_POOL') return false
       return true
     }
@@ -327,5 +375,20 @@ export function getAvailableAbilities(
     ? collectUnitAbilities(faction, side, upgradedTypes)
     : []
 
-  return [...base, ...factionAbilities, ...unitAbilities]
+  // Twilight's Fall factions all draw from the same shared ability pool.
+  // Neutral in a TF session gets only the genome deck — the TF analog of the
+  // agent pool a TI4 neutral is offered.
+  const tfShared: RegisteredAbility[] = isTwilightsFall
+    ? TF_SHARED_REGISTERED.filter(
+        reg => !reg.ability.side || reg.ability.side === side,
+      )
+    : isTfNeutral
+      ? TF_SHARED_REGISTERED.filter(
+          reg =>
+            reg.slot === 'TF_GENOME' &&
+            (!reg.ability.side || reg.ability.side === side),
+        )
+      : []
+
+  return [...base, ...factionAbilities, ...tfShared, ...unitAbilities]
 }

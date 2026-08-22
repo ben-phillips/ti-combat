@@ -30,6 +30,11 @@ const flagshipAbilities = Object.values(otherFactions).flatMap(faction =>
       name: ability.name,
       icon: faction.icon,
       readOnly: false,
+      // Clone the invoke entries so each copy has its own references — the
+      // engine dedups "already invoked" by invoke identity, and originals
+      // with external invokes can share a side with this copy via the OTHER
+      // slot (same fix as the technology copies below).
+      invoke: ability.invoke.map(inv => ({ ...inv })),
       params: {
         ...ability.params,
         isEnabled: ability.headerUI === 'isEnabled' ? false : true,
@@ -116,7 +121,13 @@ function createFactionUnitAbility(
     description: mainAbility?.description,
     params: {
       isEnabled: false,
-      uses: Infinity,
+      // Mirror the child's `uses` default — a copy that reuses the child's
+      // uiConfig also inherits its Uses input, and a non-finite default
+      // renders as a blank field (the Exotrireme glitch).
+      uses:
+        typeof mainAbility?.params.uses === 'number'
+          ? mainAbility.params.uses
+          : Infinity,
       ...childCustomParams,
     },
     headerUI: 'isEnabled',

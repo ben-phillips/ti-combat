@@ -18,6 +18,12 @@ export type AbilitySlot =
   | 'FACTION_FLAGSHIP'
   | 'FACTION_MECH'
   | 'FACTION_UNIT'
+  // Twilight's Fall shared decks (available to every TF faction)
+  | 'TF_ABILITY'
+  | 'TF_GENOME'
+  | 'TF_PARADIGM'
+  | 'TF_ACTION_CARD'
+  | 'TF_UNIT_UPGRADE'
   | 'OTHER'
 
 export interface SlotDisplay {
@@ -29,7 +35,7 @@ export const SLOT_DISPLAY: Record<AbilitySlot, SlotDisplay> = {
   GENERAL: { category: 'GENERAL' },
   ADVANCED: { category: 'ADVANCED' },
   TECHNOLOGY: { category: 'TECHNOLOGY' },
-  ACTION_CARD: { category: 'ACTION_CARD' },
+  ACTION_CARD: { category: 'ACTION CARD' },
   RELIC: { category: 'RELIC' },
   AGENDA: { category: 'AGENDA' },
   ENVIRONMENT: { category: 'ENVIRONMENT' },
@@ -45,6 +51,11 @@ export const SLOT_DISPLAY: Record<AbilitySlot, SlotDisplay> = {
   FACTION_FLAGSHIP: { category: 'FACTION', subcategory: 'FLAGSHIP' },
   FACTION_MECH: { category: 'FACTION', subcategory: 'MECH' },
   FACTION_UNIT: { category: 'FACTION', subcategory: 'UNIT' },
+  TF_ABILITY: { category: 'ABILITY' },
+  TF_GENOME: { category: 'GENOME' },
+  TF_PARADIGM: { category: 'PARADIGM' },
+  TF_ACTION_CARD: { category: 'ACTION CARD' },
+  TF_UNIT_UPGRADE: { category: 'UNIT UPGRADE' },
   OTHER: { category: 'OTHER' },
 }
 
@@ -52,6 +63,11 @@ export const SLOT_DISPLAY: Record<AbilitySlot, SlotDisplay> = {
  *  (and FACTION subgroups). */
 export const SLOT_ORDER: readonly AbilitySlot[] = [
   'GENERAL',
+  'TF_ABILITY',
+  'TF_GENOME',
+  'TF_PARADIGM',
+  'TF_ACTION_CARD',
+  'TF_UNIT_UPGRADE',
   'FACTION_ABILITY',
   'FACTION_FLAGSHIP',
   'FACTION_AGENT',

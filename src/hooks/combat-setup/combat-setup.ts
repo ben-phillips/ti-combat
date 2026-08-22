@@ -11,14 +11,18 @@ import {
   type SideAbilitiesConfig,
 } from '@/combat'
 import { UNIT_LIMITS, UNIT_TYPES } from '@/constants/units'
-import factions from '@/data/faction'
 import type {
   CombatSide,
   FactionKey,
+  GameSystem,
   UnitBaseType,
   UnitIdList,
   UnitSelection,
 } from '@/types'
+import {
+  DEFAULT_FACTION_BY_SYSTEM,
+  getFactionSystem,
+} from '@/utils/get-faction-system'
 import {
   buildUnitStatsMap,
   getSimulationUnits,
@@ -72,6 +76,7 @@ function createDefaultUnitSelections(): Record<UnitBaseType, UnitSelection> {
  * Not exported publicly — the hook is the API.
  */
 export class CombatSetup {
+  private _system: GameSystem
   private _attackerFaction: FactionKey
   private _defenderFaction: FactionKey
   private _attackerSelections: Record<UnitBaseType, UnitSelection>
@@ -87,7 +92,8 @@ export class CombatSetup {
   private _syncSnapshots: SyncSnapshots = new Map()
 
   constructor() {
-    const defaultFaction = Object.keys(factions)[0] as FactionKey
+    this._system = 'TI4'
+    const defaultFaction = DEFAULT_FACTION_BY_SYSTEM[this._system]
     const defaultUnitStats = buildUnitStatsMap(defaultFaction)
 
     this._attackerFaction = defaultFaction
@@ -101,11 +107,13 @@ export class CombatSetup {
       'attacker',
       defaultFaction,
       this.getUpgradedTypes('attacker'),
+      this._system,
     )
     const defenderRegistered = getAvailableAbilities(
       'defender',
       defaultFaction,
       this.getUpgradedTypes('defender'),
+      this._system,
     )
     this._sideRegistered = {
       attacker: attackerRegistered,
@@ -173,6 +181,10 @@ export class CombatSetup {
 
   // ── Read accessors ──────────────────────────────────────────────────
 
+  get system(): GameSystem {
+    return this._system
+  }
+
   get attackerFaction(): FactionKey {
     return this._attackerFaction
   }
@@ -211,6 +223,32 @@ export class CombatSetup {
 
   // ── Mutations ──────────────────────────────────────────────────────
 
+  /**
+   * Switch game systems (TI4 ⇄ Twilight's Fall). Both sides always share a
+   * system, so this resets both factions to the target system's default,
+   * clears unit selections and abilities, and rebuilds from scratch.
+   */
+  setSystem(system: GameSystem): void {
+    if (this._system === system) return
+    this._system = system
+
+    const faction = DEFAULT_FACTION_BY_SYSTEM[system]
+    this._attackerSelections = createDefaultUnitSelections()
+    this._defenderSelections = createDefaultUnitSelections()
+
+    // Drop all ability config so nothing carries across systems; setFaction
+    // then repopulates each side with the new system's defaults.
+    this._abilities = { attacker: {}, defender: {} }
+    this._stateData = {
+      ...this._stateData,
+      attacker: { ...this._stateData.attacker, abilities: {} },
+      defender: { ...this._stateData.defender, abilities: {} },
+    }
+
+    this.setFaction('attacker', faction)
+    this.setFaction('defender', faction)
+  }
+
   setFaction(side: CombatSide, faction: FactionKey): void {
     if (side === 'attacker') {
       this._attackerFaction = faction
@@ -223,6 +261,7 @@ export class CombatSetup {
       side,
       faction,
       this.getUpgradedTypes(side),
+      this._system,
     )
     this._sideRegistered[side] = reg
     this._sideAbilities[side] = flattenUnique(reg)
@@ -336,6 +375,7 @@ export class CombatSetup {
       side,
       faction,
       this.getUpgradedTypes(side),
+      this._system,
     )
     this._sideRegistered[side] = regReset
     this._sideAbilities[side] = flattenUnique(regReset)
@@ -401,11 +441,13 @@ export class CombatSetup {
       'attacker',
       this._attackerFaction,
       this.getUpgradedTypes('attacker'),
+      this._system,
     )
     const defenderRegistered = getAvailableAbilities(
       'defender',
       this._defenderFaction,
       this.getUpgradedTypes('defender'),
+      this._system,
     )
     this._sideRegistered = {
       attacker: attackerRegistered,
@@ -497,6 +539,15 @@ export class CombatSetup {
     // Set factions
     this._attackerFaction = af
     this._defenderFaction = df
+    // Both sides share a system; derive it from a non-neutral faction (Neutral
+    // exists in every system) so shared links restore the correct mode without
+    // a dedicated field.
+    this._system =
+      af !== 'NEUTRAL'
+        ? getFactionSystem(af)
+        : df !== 'NEUTRAL'
+          ? getFactionSystem(df)
+          : 'TI4'
     this._combatMode = config.m === 'S' ? 'SPACE' : 'GROUND'
 
     // Set unit selections
@@ -520,11 +571,13 @@ export class CombatSetup {
       'attacker',
       af,
       this.getUpgradedTypes('attacker'),
+      this._system,
     )
     const defenderReg = getAvailableAbilities(
       'defender',
       df,
       this.getUpgradedTypes('defender'),
+      this._system,
     )
     this._sideRegistered = {
       attacker: attackerReg,
@@ -647,6 +700,7 @@ export class CombatSetup {
         side,
         faction,
         this.getUpgradedTypes(side),
+        this._system,
       )
       this._sideRegistered[side] = regUpd
       this._sideAbilities[side] = flattenUnique(regUpd)

@@ -10,7 +10,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 1, CRUISER: 1 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -33,7 +33,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 1, CRUISER: 1 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -49,7 +49,7 @@ describe.forEachSide('EXOTRIREME', () => {
     expect(t.abilityLog('EXOTRIREME')).not.toHaveLength(0)
   })
 
-  it('does not fire when no valid targets remain', () => {
+  it('does not fire with default params — uses starts at 0 (opt-in)', () => {
     const t = combatTest({
       mode: 'SPACE',
       attacker: {
@@ -57,6 +57,53 @@ describe.forEachSide('EXOTRIREME', () => {
         units: { DREADNOUGHT: 1, CRUISER: 1 },
         upgrades: ['DREADNOUGHT'],
         abilities: { EXOTRIREME: true },
+      },
+      defender: {
+        faction: 'ARBOREC',
+        units: { CRUISER: 3 },
+      },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 0, defender: 0 })
+
+    expect(t.attacker.units.DREADNOUGHT).toHaveLength(1)
+    expect(t.defender.units.CRUISER).toHaveLength(3)
+    expect(t.abilityLog('EXOTRIREME')).toHaveLength(0)
+  })
+
+  it('uses cap limits sacrifices even with more dreadnoughts', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'SARDAKK_NORR',
+        units: { DREADNOUGHT: 2, CRUISER: 1 },
+        upgrades: ['DREADNOUGHT'],
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
+      },
+      defender: {
+        faction: 'ARBOREC',
+        units: { CRUISER: 5 },
+      },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 0, defender: 0 })
+
+    // Only one dreadnought sacrifices (2 cruisers destroyed); the second
+    // is gated by the exhausted uses.
+    expect(t.attacker.units.DREADNOUGHT).toHaveLength(1)
+    expect(t.defender.units.CRUISER).toHaveLength(3)
+  })
+
+  it('does not fire when no valid targets remain', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'SARDAKK_NORR',
+        units: { DREADNOUGHT: 1, CRUISER: 1 },
+        upgrades: ['DREADNOUGHT'],
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -81,7 +128,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 2, CRUISER: 1 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 2 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -104,7 +151,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 2, CRUISER: 2 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 2 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -126,7 +173,7 @@ describe.forEachSide('EXOTRIREME', () => {
         faction: 'SARDAKK_NORR',
         units: { INFANTRY: 2 },
         upgrades: ['DREADNOUGHT'],
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',
@@ -146,7 +193,7 @@ describe.forEachSide('EXOTRIREME', () => {
       attacker: {
         faction: 'SARDAKK_NORR',
         units: { DREADNOUGHT: 1, CRUISER: 1 },
-        abilities: { EXOTRIREME: true },
+        abilities: { EXOTRIREME: { isEnabled: true, uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',

@@ -1,6 +1,7 @@
 import { z } from 'zod/mini'
 
 import { type Ability, declareParam } from '@/combat'
+import { UNIT_LIMITS } from '@/constants/units'
 import type { UnitId, UnitList } from '@/types'
 import { UnitListBooleanSchema } from '@/types'
 
@@ -21,7 +22,7 @@ export const exotrireme: Ability<Params> = {
   }),
   params: {
     isEnabled: false,
-    uses: Infinity,
+    uses: 0,
     sacrificePriority: declareParam({
       default: [] as UnitList<boolean>,
       source: 'ships',
@@ -93,6 +94,7 @@ export const exotrireme: Ability<Params> = {
       label: 'Uses',
       type: 'number',
       min: 0,
+      max: UNIT_LIMITS.DREADNOUGHT,
     },
     {
       key: 'sacrificePriority',

@@ -248,3 +248,91 @@
 
 - [x] **Nebula** — If a space combat occurs in a nebula, the defender applies +1 to each combat roll of their ships during that combat.
 - [x] **Entropic Scar** — All unit abilities cannot be used by or against units inside of an entropic scar.
+
+---
+
+## Twilight's Fall
+
+TF factions have only a unique flagship + mech; everything else comes from the shared TF unit roster and shared draw decks (Abilities, Genomes, Paradigms, Action Cards, Unit Upgrades). Combat-relevant cards that mirror a TI4 ability exactly (mechanic **and** timing window) reuse that implementation under the TF name; cards whose timing differs get bespoke implementations.
+
+Each TF faction carries its own logo (traced to SVG from the bern/ti4lookup PNGs). The Neutral faction in a TF session matches the TF slot layout: no OTHER catch-all, no Galvanize, and the TI4 agent pool replaced by the TF genome deck (the active `system` is threaded into `getAvailableAbilities` since Neutral belongs to every system).
+
+### Action Cards (bespoke)
+
+- [x] **Hardlight** — Before hits are assigned to your units: Cancel up to 2 hits. (Broader window than Shields Holding — applies in space combat, ground combat, and against unit-ability hits.)
+- [x] **Lash** — When one of your units is destroyed: Destroy 1 of your opponent's units in its system that has an equal or lower cost.
+- [x] **Divinity** — When 1 of your units would be destroyed: It is not destroyed instead (one-shot). Covers destruction from hits (cancels one incoming hit) AND opponent-inflicted direct-destroy effects (Spark, Lash, roll triggers, …) via the engine's `preventDestroy` hook; both paths share the single use. Self-inflicted destroys (costs like Devotion, Exotrireme's self-destruct) are not prevented.
+- [x] **Spark** — After another player's unit uses Sustain Damage to cancel a hit produced by your units/abilities: Destroy that unit. Like Direct Hit but usable in **ground combat** too (destroys sustaining mechs); respects Spark-immunity (dreadnought upgrades).
+- [x] **Atomize** — When your flagship is destroyed: destroy all other ships in the system (both sides). Modeled on Van Hauge.
+- [x] **Cloak** — After you activate a system: Space Cannon cannot be used against your ships (reuses Solar Flare).
+- [x] **Converge** — Space Cannon Offense hits must be assigned to non-fighter ships if able (reuses the Graviton Laser System phase hook); Space Cannon Defense hits must be assigned to mechs if able (mirrored hook in the SCD phase driver, so the card also applies in ground combat).
+- [x] **Meld** — When a die is rolled by any player: Roll two dice instead and add them together (max 10). Modeled as a distribution transform on every die of BOTH sides while enabled (combat + unit-ability rolls) via the kernel's CUSTOM_ROLL declaration. Post-roll face-level effects (±1 flips, rerolls) still assume uniform d10 faces, so stacking them on melded dice is approximate.
+- [ ] **Trine** — Off-board Space Cannon (not modeled — single-system calculator).
+
+### Shared pool — reused TI4 implementations (mechanic + timing identical)
+
+- [x] Abilities: Unrelenting, Ambush, Harrow, Indoctrination, Munitions Reserves, Non-Euclidean Shielding, Dimensional Splicer, Raid Formation, Valkyrie Particle Weave, Devotion, Zealous, Tactical Brilliance
+- [x] Genomes (reused): Altruistic Genome, Aristocratic Genome, Human Genome, Temporal Genome (= The Thundarian: after the Roll Dice step, hits are not assigned; restart the round's roll)
+- [x] Action Cards (reused): Meddle (= Heart of Ixth)
+
+### Abilities (bespoke — mechanics differ from the same-named TI4/TE cards)
+
+- [x] **Smothering Presence** — Opponent units lose ALL unit abilities (structure presence/adjacency is asserted by enabling the card — not derivable in a single-system calculator).
+- [x] **Proxima Targeting VI** — Cancel 1 hit per Bombardment roll against you; optional Bombardment 7(x3) against opponent AND self each ground round. Distinct from the TE Last Bastion card (which scales with Galvanize and rolls 8s).
+- [x] **Supercharge** — +2 to ONE unit's combat rolls every round (the TI4 technology is +1 to all rolls for one round, exhaust-based). Target is a Gravleash-style ordered priority list per combat mode — the unit is re-chosen each roll, so the bonus falls through to the next type when the preferred one has died.
+- [x] **Temporal Command Suite** — `uses` = command tokens spent re-readying the chosen genome; extra genome uses are pre-granted at PREPARE (math-equivalent to readying after each exhaust). The TI4 version readies agents.
+
+### Genomes (bespoke)
+
+- [x] **Mirror Genome** — When you move ships: Space Cannon cannot be used against them (same effect as Cloak, distinct key).
+- [x] **Splitting Genome** — After your destroyer or cruiser is destroyed: place up to 2 fighters in its system.
+- [x] **Valiant Genome** — After one of your units is destroyed: roll 1 die; if ≥ that unit's combat value, your opponent must destroy 1 of their units (Courageous with a single die, both combat modes).
+- [x] **Clever Genome** — Has the text ability of 1 other genome (the TF Ssruu, from Yssaril). Modeled like Ssruu: a dropdown picks the copied genome from the deck; every genome's invokes are wrapped with a guard on the selected key and marked external.
+
+### Unit Upgrades
+
+Full shared deck of unit-upgrade cards, each overriding a generic unit's stats. Up to **one upgrade per unit type** may be applied at a time (one cruiser card AND one carrier card is fine; two cruiser cards is not — enforced via a per-unit-type `exclusiveGroup`); **mech** upgrades stack. 27 cards total (25 non-mech + 2 mech):
+
+Listed in the UI's unit order (cards alphabetical within each unit type):
+
+- [x] Flagship: Echo of Ascension (relative: −1 combat value, +1 die, +1 move, +2 capacity on the faction's own flagship)
+- [x] War Sun: Prototype War Sun, The Dragon Freed, University War Sun
+- [x] Dreadnought: Dawncrusher, Exotrireme (Spark-immune + opt-in self-destruct to kill up to 2 ships), Super-Dreadnought
+- [x] Carrier: Advanced Carrier, Ambassador, Vortexer (capacity changes feed the capacity phase; their coexistence/capture clauses are out-of-combat)
+- [x] Cruiser: Ahk Syl Fier, Corsair, Saggitaria
+- [x] Destroyer: Exile, Linkship (destroys an eligible enemy ship on retreat), Strike Wing Alpha (AFB 9/10 also destroys enemy infantry in the space area)
+- [x] Fighter: Hybrid Crystal Fighter, Morphwing, Triune
+- [x] Mech (stacking): Eidolon Landwaster (+1 die), Eidolon Terminus (−1 combat)
+- [x] Infantry: Guild Agents, Letani Warrior, Yin Clone
+- [x] PDS: Hel-Titan (fights in ground combat as a ground force), Justiciar Rail (non-fighter SC targeting), Keeper Matrix
+- Omitted (no combat impact — movement/production/cost only): Floating Factories / Helios Entity / Production Biomes (space docks), Valefar Prime (mech cost)
+
+### Singularity
+
+- [x] **Singularity X / Y / Z** — Once per combat, after an opponent unit is destroyed, gain the text of one of your opponent's **Abilities** (chosen from a dropdown) for the rest of the combat. Copies from the Abilities deck only (never unit upgrades or other singularities); activates mid-combat (Nekro-style `AFTER_DESTROY`), so it differs from pre-enabling the ability.
+
+### Paradigms (hero-style)
+
+Only the combat-relevant paradigms are modeled. Ship-placement paradigms (Artemiris Ascendant, Dimensional Reflection) are expressed via the starting fleet, so they are omitted.
+
+- [x] **Insurrection** — At the start of a space combat: for each of your opponent's ships destroyed during the combat, place 1 ship of that type from your reinforcements (reuses Sleeper Cell).
+- [x] **Intelligence Unshackled** — When one of your units is destroyed: roll 1 die for each of your opponent's units in the system; for each result ≥ the catalyst's combat value, destroy that unit. (Apollo without the galvanize requirement.)
+
+### Relics / Artifacts
+
+Available to TF factions (the RELIC slot is shown): Crown of Thalnos, Lightrail Ordnance, Metali Void Armaments, Metali Void Shielding, and Heart of Ixth. Heart of Ixth (relic) and Meddle (action card) are the same ±1 effect but distinct cards, so both can be held at once — and their flips stack, so together they lift a die sitting 2 below its hit value (a lone PDS at space cannon 6 hits 70% of the time with both cards).
+
+### Faction flagship/mech unique abilities
+
+Stats (combat/AFB/Bombardment/Sustain) are wired for all 8 factions. Unique text abilities:
+
+- [x] Radiant Aur mech (Starlancer II) — repair your mechs at the start of a ground round; uses counter = strategy tokens to spend (1 per repair)
+- [x] Saint of Swords mech (Colada) — +1 die to a unit (approximate model)
+- [x] Il Na Viroset mech (Starlancer XI) — participates in space combat as if it were a ship (rolls, takes hits, uses Sustain Damage). MECH appears as a draggable entry in the space Assign Hits Order panel (worth-slot default; front = sacrifice mechs in space first, end = save them for the ground fight). The mechs fight from the ground: with no ships fielded there is no space combat for them to join, and when the last own ship dies the combat ends with the surviving mechs on the ground. Anomaly bonus (+1 per anomaly in/adjacent) is a manual count input — adjacency isn't modeled
+- [x] Sickening Lurch mech (Bone Picked Clean) — uses counter = captured infantry available; each mech whose missed-dice count reaches the spend threshold (select: 1/2/3 misses) spends 1 infantry to reroll ITS missed dice, worst rolls first when infantry run short. Built on the kernel's per-unit scoped rerolls (`unitType` + `perUnit` on `declareReroll`)
+- [x] El Nen Janovet flagship (The Faces of Janovet) — gains the unit abilities and text abilities of the side's enabled **cruiser, destroyer, and dreadnought** unit-upgrade cards: AFB / Bombardment / Sustain Damage / Spark immunity merge onto the flagship at PREPARE, and the invoke-based texts extend to it (Strike Wing Alpha's 9/10-kills-infantry AFB trigger, Linkship's retreat destroy). Exotrireme's self-destruct stays dreadnought-only ("destroy this unit" sacrifices the dreadnought itself)
+
+### Not yet implemented
+
+- [ ] Crown of Thalnos "dangerous" reroll — currently only the safe path is modeled (`safeReroll` param, no UI toggle; `false` is a no-op). Design when picked up: a **per-unit opt-in** (choose which units reroll all misses at +1 and risk destruction on a hitless reroll), needing per-unit outcome tracking through the dice kernel — adjacent to the Bone Picked Clean per-unit split machinery
+- [ ] Triune (skipped — the cancel interaction is expressible with existing controls)
