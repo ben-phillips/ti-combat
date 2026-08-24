@@ -37,6 +37,7 @@ import {
 import { helTitanDeclareParamChange, helTitanOnPrepare } from './hel-titan'
 import { justiciarRailScInvoke } from './justiciar-rail'
 import { linkshipRetreatInvoke } from './linkship-retreat'
+import { morphwingCommitInvoke, morphwingDeclareParamChange } from './morphwing'
 import { strikeWingAlphaAfbInvoke } from './strike-wing-alpha'
 
 // The Twilight's Fall unit-upgrade deck. Each card overrides the stats of one
@@ -280,8 +281,8 @@ export const TF_UNIT_UPGRADE_CONFIGS: readonly TfUnitUpgradeConfig[] = [
   // All three carry the Fighter II movement/fleet-pool clause: fighters fill
   // ship capacity first and only the excess counts against the fleet pool —
   // at 1/2 a ship each for Hybrid Crystal Fighter, 1 for the others.
-  // Morphwing's invasion clause and Triune's action-card cancel are out of
-  // combat scope.
+  // Morphwing additionally carries Matriarch's invasion clause; Triune's
+  // action-card cancel is out of combat scope.
   {
     key: 'TF_UPGRADE_HYBRID_CRYSTAL_FIGHTER',
     icon: naaluCollectiveIcon,
@@ -299,12 +300,14 @@ export const TF_UNIT_UPGRADE_CONFIGS: readonly TfUnitUpgradeConfig[] = [
     icon: naazRokhaAllianceIcon,
     name: 'Morphwing',
     description:
-      'This unit may move without being transported. Fighters in excess of your ships’ capacity count against your fleet pool.',
+      'This unit may move without being transported. Fighters in excess of your ships’ capacity count against your fleet pool. During an invasion in this system, you may commit these units to planets as if they were ground forces. When combat ends, return those units to the space area.',
     unitType: 'FIGHTER',
     cost: 0.5,
     combat: [7, 1],
     move: 2,
     fleetPoolCost: 1,
+    declareParamChange: morphwingDeclareParamChange,
+    invokes: [morphwingCommitInvoke],
   },
   {
     key: 'TF_UPGRADE_TRIUNE',

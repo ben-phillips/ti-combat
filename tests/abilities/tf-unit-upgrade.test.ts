@@ -74,6 +74,58 @@ describe('TF unit upgrades', () => {
     expect(t.attacker.units.FIGHTER).toHaveLength(4)
   })
 
+  it('Morphwing fighters may commit to ground combat', () => {
+    const t = combatTest({
+      mode: 'GROUND',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { FIGHTER: 2, INFANTRY: 1 },
+        abilities: { TF_UPGRADE_MORPHWING: true },
+      },
+      defender: { faction: 'ARBOREC', units: { INFANTRY: 1 } },
+    })
+
+    t.advanceTo('GROUND_COMBAT')
+    t.advanceRound()
+
+    expect(t.dicePool().attacker).toContainDice('FIGHTER', [7, 1])
+  })
+
+  it('Morphwing fighters are hit targets once committed, after infantry', () => {
+    const t = combatTest({
+      mode: 'GROUND',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { FIGHTER: 2, INFANTRY: 2 },
+        abilities: { TF_UPGRADE_MORPHWING: true },
+      },
+      defender: { faction: 'ARBOREC', units: { INFANTRY: 3 } },
+    })
+
+    t.advanceTo('GROUND_COMBAT')
+    t.advanceRound({ attacker: 3 })
+
+    expect(t.attacker.units.INFANTRY).toBeUndefined()
+    expect(t.attacker.units.FIGHTER).toHaveLength(1)
+  })
+
+  it('Morphwing does not let the defender commit fighters', () => {
+    const t = combatTest({
+      mode: 'GROUND',
+      attacker: { faction: 'ARBOREC', units: { INFANTRY: 1 } },
+      defender: {
+        faction: 'AVARICE_REX',
+        units: { FIGHTER: 2, INFANTRY: 1 },
+        abilities: { TF_UPGRADE_MORPHWING: true },
+      },
+    })
+
+    t.advanceTo('GROUND_COMBAT')
+    t.advanceRound()
+
+    expect(t.dicePool()?.defender?.FIGHTER).toBeUndefined()
+  })
+
   it('Hybrid Crystal Fighters fill capacity first, excess at half a fleet pool', () => {
     const t = combatTest({
       mode: 'SPACE',
