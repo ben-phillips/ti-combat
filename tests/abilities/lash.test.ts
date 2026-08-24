@@ -25,6 +25,57 @@ describe('TF_LASH', () => {
     expect(t.defender.units.CRUISER).toHaveLength(1)
   })
 
+  it('does not trigger on unchecked own unit types', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { FIGHTER: 1 },
+        abilities: {
+          TF_LASH: { isEnabled: true, spaceTriggers: [['FIGHTER', false]] },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { FIGHTER: 1, CRUISER: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    // Only a fighter is lost — unchecked, so the card is kept.
+    t.advanceRound({ attacker: 1, defender: 0 })
+
+    expect(t.abilityLog('TF_LASH')).toHaveLength(0)
+    expect(t.defender.units.FIGHTER).toHaveLength(1)
+    expect(t.state.attacker.abilities.TF_LASH.uses).toBe(1)
+  })
+
+  it('destroys the first checked type in the target priority order', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CRUISER: 1 },
+        abilities: {
+          TF_LASH: {
+            isEnabled: true,
+            // Default worth-desc order would take the destroyer; prefer
+            // fighters instead.
+            spaceTargetPriority: [
+              ['FIGHTER', true],
+              ['DESTROYER', true],
+            ],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { DESTROYER: 1, FIGHTER: 2 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 1, defender: 0 })
+
+    expect(t.abilityLog('TF_LASH')).not.toHaveLength(0)
+    expect(t.defender.units.FIGHTER).toHaveLength(1)
+    expect(t.defender.units.DESTROYER).toHaveLength(1)
+  })
+
   it('does not fire when no eligible (cheap enough) target exists', () => {
     const t = combatTest({
       mode: 'SPACE',

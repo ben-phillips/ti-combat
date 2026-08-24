@@ -153,6 +153,38 @@ describe.forEachSide('FLEET_POOL', () => {
     expect(t.attacker.units.CARRIER).toHaveLength(1)
   })
 
+  it('upgraded fighters within ship capacity cost no fleet pool', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'ARBOREC',
+        // Carrier (cap 4) absorbs 3 Fighter IIs — no excess, so only the
+        // carrier's 1 counts against the pool. The ships' printed capacity
+        // applies even without the CAPACITY enforcement toggle.
+        units: { CARRIER: 1, FIGHTER: 3 },
+        upgrades: ['FIGHTER'],
+        abilities: {
+          FLEET_POOL: {
+            isEnabled: true,
+            fleetPool: 1,
+            shipPriority: [['CARRIER'], ['FIGHTER']],
+          },
+        },
+      },
+      defender: {
+        faction: 'ARBOREC',
+        units: { CRUISER: 1 },
+      },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+
+    t.advanceRound()
+
+    expect(t.attacker.units.CARRIER).toHaveLength(1)
+    expect(t.attacker.units.FIGHTER).toHaveLength(3)
+  })
+
   it('upgraded fighters count toward fleet pool (cost 1)', () => {
     const t = combatTest({
       mode: 'SPACE',

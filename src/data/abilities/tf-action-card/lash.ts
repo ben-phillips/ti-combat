@@ -1,18 +1,35 @@
-import type { Ability, AbilityReadContext } from '@/combat'
-import type { UnitId } from '@/types'
+import {
+  type Ability,
+  type AbilityReadContext,
+  type CombatMode,
+  declareParam,
+} from '@/combat'
+import type { UnitId, UnitList, UnitType } from '@/types'
 
-type Params = { isEnabled: boolean }
+type Params = {
+  spaceTriggers: UnitList<boolean>
+  groundTriggers: UnitList<boolean>
+  spaceTargetPriority: UnitList<boolean>
+  groundTargetPriority: UnitList<boolean>
+}
 
-/** Highest COST among this side's own units destroyed in `ids`, or undefined
- *  if none of the destroyed units belong to this side. */
-function maxOwnDestroyedCost(
+function modeKeys(mode: CombatMode) {
+  return mode === 'GROUND'
+    ? (['groundTriggers', 'groundTargetPriority'] as const)
+    : (['spaceTriggers', 'spaceTargetPriority'] as const)
+}
+
+/** Highest COST among this side's own units destroyed in `ids` whose variant
+ *  is checked in `triggers`, or undefined when no checked unit died. */
+function maxTriggeredCost(
   ctx: AbilityReadContext,
   ids: UnitId[],
+  triggers: string[],
 ): number | undefined {
   let max: number | undefined
   for (const id of ids) {
     const key = ctx.api.own.getUnitVariantKey(id)
-    if (!key) continue // not one of our units
+    if (!key || !triggers.includes(key)) continue
     const cost = ctx.api.own.getUnitStats(key)?.COST
     if (typeof cost === 'number' && (max === undefined || cost > max)) {
       max = cost
@@ -21,31 +38,31 @@ function maxOwnDestroyedCost(
   return max
 }
 
-/** The most valuable opponent unit whose COST is ≤ `threshold`. */
+/** Walk the target priority in list order; the first checked variant with a
+ *  living unit and COST ≤ `threshold` wins (Vos Hollow's pattern). */
 function findOpponentTarget(
   ctx: AbilityReadContext,
+  priority: UnitType[],
   threshold: number,
 ): UnitId | undefined {
-  let best: UnitId | undefined
-  let bestCost = -1
-  for (const type of ctx.api.opponent.getParticipatingUnitTypes()) {
-    const cost = ctx.api.opponent.getUnitStats(type)?.COST
-    if (typeof cost !== 'number' || cost > threshold || cost <= bestCost) {
-      continue
-    }
-    const [unit] = ctx.api.opponent.getUnits(type, { includeVariants: true })
-    if (unit) {
-      best = unit
-      bestCost = cost
-    }
+  for (const variant of priority) {
+    const cost = ctx.api.opponent.getUnitStats(variant)?.COST
+    if (typeof cost !== 'number' || cost > threshold) continue
+    const [unit] = ctx.api.opponent.getUnits(variant, {
+      includeVariants: true,
+    })
+    if (unit) return unit
   }
-  return best
+  return undefined
 }
 
 // Twilight's Fall action card. When one of your units is destroyed, destroy an
 // opponent unit in the same system whose cost is equal to or lower than the
 // lost unit's. Single-system calculator, so "in its system" is every
-// participating unit.
+// participating unit. The trigger list picks which of your losses are worth
+// the card (don't burn it on a fighter); the target list is a drag-ordered
+// priority — the first checked type that fits under the cost threshold is
+// destroyed (defaults to most-valuable-first).
 export const lash: Ability<Params> = {
   key: 'TF_LASH',
   name: 'Lash',
@@ -54,20 +71,92 @@ export const lash: Ability<Params> = {
   params: {
     isEnabled: false,
     uses: 1,
+    spaceTriggers: declareParam<UnitList<boolean>>({
+      default: [],
+      source: 'spaceCombatParticipating',
+      side: 'own',
+      defaultItemValue: true,
+      filter: { combatMode: 'SPACE' },
+    }),
+    groundTriggers: declareParam<UnitList<boolean>>({
+      default: [],
+      source: 'groundCombatParticipating',
+      side: 'own',
+      defaultItemValue: true,
+      filter: { combatMode: 'GROUND' },
+    }),
+    spaceTargetPriority: declareParam<UnitList<boolean>>({
+      default: [],
+      source: 'spaceCombatParticipating',
+      side: 'opponent',
+      sort: 'worth-desc',
+      defaultItemValue: true,
+      filter: { combatMode: 'SPACE' },
+    }),
+    groundTargetPriority: declareParam<UnitList<boolean>>({
+      default: [],
+      source: 'groundCombatParticipating',
+      side: 'opponent',
+      sort: 'worth-desc',
+      defaultItemValue: true,
+      filter: { combatMode: 'GROUND' },
+    }),
   },
   headerUI: 'isEnabled',
+  uiConfig: ctx => {
+    const [triggersKey, targetsKey] = modeKeys(ctx.state.combatMode)
+    return [
+      {
+        key: triggersKey,
+        label: 'Trigger on losing',
+        type: 'unit-list',
+        mode: 'checkbox',
+        items: ctx.api.own.getUnitVariantsOptions(triggersKey),
+      },
+      {
+        key: targetsKey,
+        // Unlike Valiant/Courageous, Lash's owner picks the victim — this
+        // list IS targeting: the first checked type under the cost cap dies.
+        label: 'Destroy order',
+        type: 'unit-list',
+        mode: 'checkbox',
+        sortable: true,
+        items: ctx.api.opponent.getUnitVariantsOptions(targetsKey),
+      },
+    ]
+  },
   invoke: [
     {
       timing: 'AFTER_DESTROY',
-      isCallable: (_params, ctx, ids) => {
-        const threshold = maxOwnDestroyedCost(ctx, ids)
+      isCallable: (params, ctx, ids) => {
+        const [triggersKey, targetsKey] = modeKeys(ctx.state.combatMode)
+        const threshold = maxTriggeredCost(
+          ctx,
+          ids,
+          ctx.utils.getFlat(params[triggersKey]),
+        )
         if (threshold === undefined) return false
-        return findOpponentTarget(ctx, threshold) !== undefined
+        return (
+          findOpponentTarget(
+            ctx,
+            ctx.utils.getFlat(params[targetsKey]),
+            threshold,
+          ) !== undefined
+        )
       },
-      call: (ctx, _params, ids) => {
-        const threshold = maxOwnDestroyedCost(ctx, ids)
+      call: (ctx, params, ids) => {
+        const [triggersKey, targetsKey] = modeKeys(ctx.state.combatMode)
+        const threshold = maxTriggeredCost(
+          ctx,
+          ids,
+          ctx.utils.getFlat(params[triggersKey]),
+        )
         if (threshold === undefined) return
-        const target = findOpponentTarget(ctx, threshold)
+        const target = findOpponentTarget(
+          ctx,
+          ctx.utils.getFlat(params[targetsKey]),
+          threshold,
+        )
         if (target) ctx.api.opponent.destroyUnits(target)
       },
     },

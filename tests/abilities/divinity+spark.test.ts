@@ -51,6 +51,34 @@ describe('TF_DIVINITY + TF_SPARK', () => {
     expect(t.abilityLog('TF_DIVINITY')).toHaveLength(0)
   })
 
+  it('does not counter Spark for an unchecked unit type', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CRUISER: 1 },
+        abilities: { TF_SPARK: { uses: 1 } },
+      },
+      defender: {
+        faction: 'AVARICE_REX',
+        units: { DREADNOUGHT: 1 },
+        abilities: {
+          TF_DIVINITY: {
+            isEnabled: true,
+            spaceTargets: [['DREADNOUGHT', false]],
+          },
+        },
+      },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ defender: 1 })
+
+    // Divinity's save is reserved for other unit types — Spark resolves.
+    expect(t.defender.units.DREADNOUGHT).toBeUndefined()
+    expect(t.state.defender.abilities.TF_DIVINITY.uses).toBe(1)
+  })
+
   it('saves the sustaining mech from Spark in ground combat', () => {
     const t = combatTest({
       mode: 'GROUND',

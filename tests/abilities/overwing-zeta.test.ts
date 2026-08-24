@@ -97,14 +97,22 @@ describe.forEachSide('OVERWING_ZETA', () => {
     expect(t.attacker.units.DESTROYER).toBeUndefined()
   })
 
-  it('does not fire when no ships configured', () => {
+  it('does not fire when the ship counts are all zero', () => {
     const t = combatTest({
       mode: 'SPACE',
       attacker: {
         faction: 'COUNCIL_KELERES',
         units: { CRUISER: 2 },
         abilities: {
-          OVERWING_ZETA: { isEnabled: true },
+          // The default is flagship 1 + cruisers 2 — zero it out explicitly.
+          OVERWING_ZETA: {
+            isEnabled: true,
+            ships: [
+              ['FLAGSHIP', 0],
+              ['CRUISER', 0],
+              ['DESTROYER', 0],
+            ],
+          },
         },
       },
       defender: {

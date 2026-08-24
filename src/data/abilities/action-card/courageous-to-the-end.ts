@@ -96,7 +96,10 @@ export const courageousToTheEnd: Ability<Params> = {
     },
     {
       key: 'targetPriority',
-      label: 'Allowed Targets',
+      // A spend gate, not targeting: the opponent assigns the kills via
+      // their own sacrifice order — this only governs whether the card is
+      // worth playing.
+      label: "Use only if they'd lose",
       type: 'unit-list',
       mode: 'checkbox',
       items: ctx.api.opponent.getUnitVariantsOptions('targetPriority'),

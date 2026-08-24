@@ -154,6 +154,13 @@ export class SideApi {
     return this.state[this._side].faction
   }
 
+  /** The simulation's combat mode. Exposed for hooks that receive only a
+   *  `SideApi` (e.g. `Ability.preventDestroy`) but need to pick between
+   *  space- and ground-scoped params. */
+  getCombatMode(): CombatMode {
+    return this.state.combatMode
+  }
+
   getUnits(unitType: UnitType, options: GetUnitsOptions) {
     return CombatSideState.getUnits(this._sideData, unitType, options)
   }

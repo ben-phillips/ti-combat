@@ -155,6 +155,7 @@ export function collectModifiers(input: CollectModifiersInput): Modifier[] {
       key: d.abilityKey,
       shouldTransform: d.shouldTransform,
       createGenerator: d.createGenerator,
+      singleDie: d.singleDie,
     }
     const idx: 0 | 1 = d.side === firing ? 0 : 1
     upsertSlot(crByKey, d.abilityKey, idx, slot)

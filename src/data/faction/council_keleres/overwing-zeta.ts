@@ -24,7 +24,13 @@ export const overwingZeta: Ability<Params> = {
     uses: 1,
     strategy: 'IMMEDIATELY',
     ships: declareParam({
-      default: [],
+      // Default to the on-card maximum — the flagship plus 2 cruisers — so
+      // enabling the card does something without further configuration.
+      // Shared by the TF paradigm rebrand (Artemiris Ascendant).
+      default: [
+        ['FLAGSHIP', 1],
+        ['CRUISER', 2],
+      ],
       source: 'ships',
       defaultItemValue: 0,
       filter: {

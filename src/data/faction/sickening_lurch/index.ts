@@ -18,7 +18,14 @@ export const sickening_lurch: Faction = {
         COST: 8,
         COMBAT: [7, 2],
         MOVE: 1,
+        // "This ship can transport any number of infantry and fighters, and
+        // they do not count against this ship's capacity." Only infantry and
+        // fighters are free — mechs still pay into the printed capacity of 1.
+        // FREE_CARGO is checked against living units by the capacity driver,
+        // so the exemption ends the moment the flagship dies and the cleanup
+        // enforces real capacity again.
         CAPACITY: 1,
+        FREE_CARGO: ['FIGHTER', 'INFANTRY'],
         UNIT_ABILITIES: {
           SUSTAIN_DAMAGE: true,
           BOMBARDMENT: [7, 1],

@@ -40,6 +40,28 @@ describe('TF_SPARK', () => {
     expect(t.defender.units.MECH).toBeUndefined()
   })
 
+  it('is not spent on unchecked target types', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CRUISER: 1 },
+        abilities: {
+          TF_SPARK: { uses: 1, spaceTargets: [['DREADNOUGHT', false]] },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { DREADNOUGHT: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ defender: 1 })
+
+    // Dreadnought sustained, but it's unchecked — the card is kept.
+    expect(t.defender.units.DREADNOUGHT).toHaveLength(1)
+    expect(t.defender.units.DREADNOUGHT![0].isDamaged).toBe(true)
+    expect(t.state.attacker.abilities.TF_SPARK.uses).toBe(1)
+  })
+
   it('cannot destroy a Spark-immune dreadnought upgrade', () => {
     const t = combatTest({
       mode: 'SPACE',

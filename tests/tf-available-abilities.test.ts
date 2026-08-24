@@ -22,6 +22,23 @@ describe("Twilight's Fall available abilities", () => {
     expect(regs.some(r => r.ability.key === 'PRE_GALVANIZED')).toBe(true)
   })
 
+  it('Temporal Command Suite offers every genome, Clever Genome included', () => {
+    const regs = getAvailableAbilities('attacker', 'AVARICE_REX')
+    const tcs = regs.find(
+      r => r.ability.key === 'TF_TEMPORAL_COMMAND_SUITE',
+    )!.ability
+    // The factory's uiConfig ignores its arguments — safe to call bare.
+    const [genomeList] = (
+      tcs.uiConfig as unknown as () => { items: { value: string }[] }[]
+    )()
+    const values = genomeList.items.map(i => i.value)
+    // Clever Genome is a separate ability instance — re-readying it fires
+    // the copied text a second time in the same window, so it gets a row.
+    expect(values).toContain('TF_CLEVER_GENOME')
+    expect(values).toContain('TELLURIAN')
+    expect(values.length).toBeGreaterThan(5)
+  })
+
   it('lists TF abilities and genomes alphabetically', () => {
     const regs = getAvailableAbilities('attacker', 'AVARICE_REX')
     const names = (slot: string) =>
@@ -89,6 +106,25 @@ describe("Twilight's Fall available abilities", () => {
     expect(regs.some(r => r.slot === 'OTHER')).toBe(true)
     expect(regs.some(r => r.ability.key === 'PRE_GALVANIZED')).toBe(true)
     expect(regs.some(r => r.slot === 'TF_GENOME')).toBe(false)
+  })
+
+  it('Artemiris Ascendant defaults to placing the flagship and 2 cruisers', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CRUISER: 1 },
+        abilities: { OVERWING_ZETA: true },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound()
+
+    // Placed at the start of round 1 with no further configuration.
+    expect(t.attacker.units.FLAGSHIP).toHaveLength(1)
+    expect(t.attacker.units.CRUISER).toHaveLength(3)
   })
 
   it('neutral vs a TF faction can use a TF genome in combat', () => {

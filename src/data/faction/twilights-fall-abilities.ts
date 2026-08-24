@@ -1,5 +1,6 @@
 import argentFlightIcon from '@/assets/faction/argent_flight.svg?raw'
 import baronyOfLetnevIcon from '@/assets/faction/barony_of_letnev.svg?raw'
+import councilKeleresIcon from '@/assets/faction/council_keleres.svg?raw'
 import crimsonRebellionIcon from '@/assets/faction/crimson_rebellion.svg?raw'
 import federationOfSolIcon from '@/assets/faction/federation_of_sol.svg?raw'
 import ghostsOfCreussIcon from '@/assets/faction/ghosts_of_creuss.svg?raw'
@@ -22,6 +23,7 @@ import {
   collectCopyable,
   createTfSingularity,
 } from '@/data/abilities/tf-ability/create-tf-singularity'
+import { planesplitter } from '@/data/abilities/tf-ability/planesplitter'
 import { proximaTargetingVi } from '@/data/abilities/tf-ability/proxima-targeting-vi'
 import { smotheringPresence } from '@/data/abilities/tf-ability/smothering-presence'
 import { supercharge } from '@/data/abilities/tf-ability/supercharge'
@@ -29,6 +31,7 @@ import { createTfTemporalCommandSuite } from '@/data/abilities/tf-ability/tempor
 import { atomize } from '@/data/abilities/tf-action-card/atomize'
 import { converge } from '@/data/abilities/tf-action-card/converge'
 import { divinity } from '@/data/abilities/tf-action-card/divinity'
+import { feint } from '@/data/abilities/tf-action-card/feint'
 import { hardlight } from '@/data/abilities/tf-action-card/hardlight'
 import { lash } from '@/data/abilities/tf-action-card/lash'
 import { meld } from '@/data/abilities/tf-action-card/meld'
@@ -45,12 +48,15 @@ import { trrakanAunZulok } from './argent_flight/trrakan-aun-zulok'
 import { munitionsReserves } from './barony_of_letnev/munitions-reserves'
 import { nonEuclideanShielding } from './barony_of_letnev/non-euclidean-shielding'
 import { viscountUnlenn } from './barony_of_letnev/viscount-unlenn'
+import { overwingZeta } from './council_keleres/overwing-zeta'
+import { fragmentReality } from './crimson_rebellion/fragment-reality'
 import { evelynDelouis } from './federation_of_sol/evelyn-delouis'
 import { dimensionalSplicer } from './ghosts_of_creuss/dimensional-splicer'
 import { harrow } from './l1z1x_mindnet/harrow'
 import { ambush } from './mentak_coalition/ambush'
 import { sleeperCell } from './mentak_coalition/sleeper-cell'
 import { thundarian } from './nomad/thundarian'
+import { ghomSekkus } from './sardakk_norr/ghom-sekkus'
 import { unrelenting } from './sardakk_norr/unrelenting'
 import { valkyrieParticleWeave } from './sardakk_norr/valkyrie-particle-weave'
 import { tellurian } from './titans_of_ul/tellurian'
@@ -65,9 +71,9 @@ import { indoctrination } from './yin_brotherhood/indoctrination'
 // that implementation under the TF name. Only reuse when the timing window
 // also matches; TF cards whose window differs (e.g. Hardlight vs Shields
 // Holding) need their own implementation and are intentionally not here yet.
-// `icon` is the ORIGINATING TI4/TE faction's logo (per the ti4lookup CSVs'
-// faction id column) — TF's shared decks are drawn from those factions' kits,
-// and the logo shows a card's provenance at a glance.
+// `icon` is the ORIGINATING TI4/TE faction's logo — TF's shared decks are
+// drawn from those factions' kits, and the logo shows a card's provenance at
+// a glance.
 function brand(
   ability: Ability,
   name: string,
@@ -160,6 +166,10 @@ const tfAbilities: RegisteredAbility[] = [
   // same name — see each file's header comment).
   {
     slot: 'TF_ABILITY',
+    ability: { ...planesplitter, icon: obsidianIcon },
+  },
+  {
+    slot: 'TF_ABILITY',
     ability: { ...proximaTargetingVi, icon: lastBastionIcon },
   },
   {
@@ -174,6 +184,12 @@ const tfAbilities: RegisteredAbility[] = [
     slot: 'TF_ABILITY',
     // The genome deck is injected lazily — `tfGenomes` is defined further
     // down, and the getter only runs at UI render / combat PREPARE time.
+    // Clever Genome IS a row of its own: as a separate ability instance it
+    // fires the copied text a SECOND time in the same timing window (2×
+    // Splitting Genome on one destruction), which extra uses on the copied
+    // genome cannot do — the engine runs a config ability once per pass.
+    // Its tokens ready the Clever card itself; which text it fires stays
+    // governed by the Clever panel's own genome dropdown.
     ability: {
       ...createTfTemporalCommandSuite(() => tfGenomes.map(r => r.ability)),
       icon: nomadIcon,
@@ -212,6 +228,15 @@ const tfAbilities: RegisteredAbility[] = [
       valkyrieParticleWeave,
       'Valkyrie Particle Weave',
       'After making combat rolls during a round of ground combat: If your opponent produced 1 or more hits, you produce 1 additional hit.',
+      sardakkNorrIcon,
+    ),
+  },
+  {
+    slot: 'TF_ABILITY',
+    ability: brand(
+      ghomSekkus,
+      'Valkyrie Vanguard',
+      'During the "Commit Ground Forces" step: You can commit up to 1 ground force from each planet in the active system and each planet in adjacent systems that do not contain 1 of your command tokens.',
       sardakkNorrIcon,
     ),
   },
@@ -308,8 +333,27 @@ export const TF_SHARED_REGISTERED: readonly RegisteredAbility[] = [
   ...tfGenomes,
 
   // ── Paradigms (hero-style, once per combat) ──────────────────────────
-  // Ship-placement paradigms (Artemiris Ascendant, Dimensional Reflection) are
-  // omitted — they just add ships, which is expressed by the starting fleet.
+  // The ship-placement paradigms reuse the matching hero implementations:
+  // placing ships at the start of combat differs from fielding them from the
+  // outset (they dodge Space Cannon Offense and other pre-combat effects).
+  {
+    slot: 'TF_PARADIGM',
+    ability: brand(
+      overwingZeta,
+      'Artemiris Ascendant',
+      'At the start of a round of space combat in a system that contains a planet you control: Place your flagship and any combination of up to 2 cruisers or destroyers from your reinforcements into the active system. Then, purge this card.',
+      councilKeleresIcon,
+    ),
+  },
+  {
+    slot: 'TF_PARADIGM',
+    ability: brand(
+      fragmentReality,
+      'Dimensional Reflection',
+      'When you produce ships: You may place any of those ships onto this card. At the start of combat, you may purge this card to place all ships from this card into the active system.',
+      crimsonRebellionIcon,
+    ),
+  },
   {
     slot: 'TF_PARADIGM',
     ability: brand(
@@ -339,6 +383,7 @@ export const TF_SHARED_REGISTERED: readonly RegisteredAbility[] = [
   },
   { slot: 'TF_ACTION_CARD', ability: converge },
   { slot: 'TF_ACTION_CARD', ability: divinity },
+  { slot: 'TF_ACTION_CARD', ability: feint },
   { slot: 'TF_ACTION_CARD', ability: hardlight },
   { slot: 'TF_ACTION_CARD', ability: lash },
   {

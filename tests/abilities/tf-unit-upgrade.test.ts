@@ -21,6 +21,113 @@ describe('TF unit upgrades', () => {
     expect(t.dicePool().attacker).toContainDice('FIGHTER', [7, 1])
   })
 
+  it('Morphwing fighters in excess of capacity count against the fleet pool', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        // Cruiser has no capacity — base fighters would be removed. With
+        // Morphwing all 4 are in excess, each costing 1 fleet pool:
+        // cruiser 1 + 4 fighters = 5 > 4 → one fighter removed.
+        units: { CRUISER: 1, FIGHTER: 4 },
+        abilities: {
+          TF_UPGRADE_MORPHWING: true,
+          CAPACITY: true,
+          FLEET_POOL: {
+            isEnabled: true,
+            fleetPool: 4,
+            shipPriority: [['CRUISER'], ['FIGHTER']],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    expect(t.attacker.units.CRUISER).toHaveLength(1)
+    expect(t.attacker.units.FIGHTER).toHaveLength(3)
+  })
+
+  it('Morphwing fighters within ship capacity cost no fleet pool', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        // Carrier (cap 4) absorbs all 4 fighters — none in excess, so only
+        // the carrier's own 1 counts: 1 ≤ 1 → everything survives.
+        units: { CARRIER: 1, FIGHTER: 4 },
+        abilities: {
+          TF_UPGRADE_MORPHWING: true,
+          CAPACITY: true,
+          FLEET_POOL: {
+            isEnabled: true,
+            fleetPool: 1,
+            shipPriority: [['CARRIER'], ['FIGHTER']],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    expect(t.attacker.units.CARRIER).toHaveLength(1)
+    expect(t.attacker.units.FIGHTER).toHaveLength(4)
+  })
+
+  it('Hybrid Crystal Fighters fill capacity first, excess at half a fleet pool', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        // Carrier (cap 4) + 8 HCF: 4 fit in capacity, 4 excess × 0.5 = 2.
+        // Fleet pool: carrier 1 + 2 = 3 ≤ 3 → everything survives.
+        units: { CARRIER: 1, FIGHTER: 8 },
+        abilities: {
+          TF_UPGRADE_HYBRID_CRYSTAL_FIGHTER: true,
+          CAPACITY: true,
+          FLEET_POOL: {
+            isEnabled: true,
+            fleetPool: 3,
+            shipPriority: [['CARRIER'], ['FIGHTER']],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    expect(t.attacker.units.CARRIER).toHaveLength(1)
+    expect(t.attacker.units.FIGHTER).toHaveLength(8)
+  })
+
+  it('Hybrid Crystal Fighters riding free on A Strangled Whisper cost no fleet pool', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'SICKENING_LURCH',
+        // The flagship carries any number of fighters free — none are in
+        // excess of capacity, so none spill into the fleet pool: flagship 1
+        // ≤ 2. Without the FREE_CARGO exemption the 6 HCF would overflow
+        // the flagship's capacity of 1 and blow the pool.
+        units: { FLAGSHIP: 1, FIGHTER: 6 },
+        abilities: {
+          TF_UPGRADE_HYBRID_CRYSTAL_FIGHTER: true,
+          CAPACITY: true,
+          FLEET_POOL: {
+            isEnabled: true,
+            fleetPool: 2,
+            shipPriority: [['FLAGSHIP'], ['FIGHTER']],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    expect(t.attacker.units.FLAGSHIP).toHaveLength(1)
+    expect(t.attacker.units.FIGHTER).toHaveLength(6)
+  })
+
   it('Echo of Ascension adjusts the flagship relative to its faction stats', () => {
     const t = combatTest({
       mode: 'SPACE',

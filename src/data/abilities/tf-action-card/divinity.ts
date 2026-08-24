@@ -1,5 +1,21 @@
-import type { Ability } from '@/combat'
-import type { UnitId } from '@/types'
+import { type Ability, type AbilityReadContext, declareParam } from '@/combat'
+import type { UnitId, UnitList } from '@/types'
+
+type Params = {
+  spaceTargets: UnitList<boolean>
+  groundTargets: UnitList<boolean>
+}
+
+/** The unit a one-hit cancel would actually save. `getAssignHitsTargets`
+ *  returns the would-be victims in pool order — most-protected first, and
+ *  the tail dies first — so with one hit cancelled the spared unit is the
+ *  most-protected victim: index 0. */
+function savedByHitCancel(ctx: AbilityReadContext): UnitId | undefined {
+  const hits = ctx.api.own.getPendingHits()
+  if (hits <= 0) return undefined
+  const victims = ctx.api.own.getAssignHitsTargets(hits)
+  return victims[0]
+}
 
 // Twilight's Fall action card. "When 1 of your units would be destroyed: It is
 // not destroyed instead." Two destruction paths are covered:
@@ -15,9 +31,13 @@ import type { UnitId } from '@/types'
 //    spared instead, consuming this card's single use.
 //
 // Both paths share the one `uses`; whichever save happens first spends the
-// card. Self-inflicted destroys (costs like Devotion) are never prevented —
+// card. The target lists say which unit types are WORTH the save — with only
+// fighters checked off, losing a fighter no longer burns the card. Both paths
+// respect them: the hit cancel fires only when the unit it would save is
+// checked, and the direct-destroy save spares the most expensive checked
+// unit. Self-inflicted destroys (costs like Devotion) are never prevented —
 // see `preventDestroy` in `abilities-engine/types.ts`.
-export const divinity: Ability = {
+export const divinity: Ability<Params> = {
   key: 'TF_DIVINITY',
   name: 'Divinity',
   description:
@@ -27,15 +47,51 @@ export const divinity: Ability = {
   params: {
     isEnabled: false,
     uses: 1,
+    spaceTargets: declareParam<UnitList<boolean>>({
+      default: [],
+      source: 'spaceCombatParticipating',
+      side: 'own',
+      defaultItemValue: true,
+      filter: { combatMode: 'SPACE' },
+    }),
+    groundTargets: declareParam<UnitList<boolean>>({
+      default: [],
+      source: 'groundCombatParticipating',
+      side: 'own',
+      defaultItemValue: true,
+      filter: { combatMode: 'GROUND' },
+    }),
   },
   headerUI: 'isEnabled',
-  preventDestroy: (_params, ids, api) => {
-    // Spare the most valuable (highest-cost) of the units about to die.
+  uiConfig: ctx => {
+    const key =
+      ctx.state.combatMode === 'GROUND' ? 'groundTargets' : 'spaceTargets'
+    return [
+      {
+        key,
+        label: 'Units worth saving',
+        type: 'unit-list',
+        mode: 'checkbox',
+        items: ctx.api.own.getUnitVariantsOptions(key),
+      },
+    ]
+  },
+  preventDestroy: (params, ids, api) => {
+    const checked = new Set(
+      (api.getCombatMode() === 'GROUND'
+        ? params.groundTargets
+        : params.spaceTargets
+      )
+        .filter(([, enabled]) => enabled)
+        .map(([key]) => key),
+    )
+    // Spare the most valuable (highest-cost) checked unit about to die.
     let best: UnitId | undefined
     let bestCost = -1
     for (const id of ids) {
       const key = api.getUnitVariantKey(id)
-      const cost = (key && api.getUnitStats(key)?.COST) || 0
+      if (!key || !checked.has(key)) continue
+      const cost = api.getUnitStats(key)?.COST || 0
       if (cost > bestCost) {
         best = id
         bestCost = cost
@@ -46,7 +102,18 @@ export const divinity: Ability = {
   invoke: [
     {
       timing: 'BEFORE_ASSIGN_HITS',
-      isCallable: (_params, ctx) => ctx.api.own.getPendingHits() > 0,
+      isCallable: (params, ctx) => {
+        const saved = savedByHitCancel(ctx)
+        if (saved === undefined) return false
+        const variant = ctx.api.own.getUnitVariantKey(saved)
+        if (!variant) return false
+        const targets = ctx.utils.getFlat(
+          ctx.state.combatMode === 'GROUND'
+            ? params.groundTargets
+            : params.spaceTargets,
+        )
+        return targets.includes(variant)
+      },
       call: ctx => {
         ctx.api.own.reduceHits(1)
       },

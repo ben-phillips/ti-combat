@@ -35,14 +35,14 @@ import {
   exotriremeUiConfig,
 } from './exotrireme'
 import { helTitanDeclareParamChange, helTitanOnPrepare } from './hel-titan'
+import { justiciarRailScInvoke } from './justiciar-rail'
 import { linkshipRetreatInvoke } from './linkship-retreat'
 import { strikeWingAlphaAfbInvoke } from './strike-wing-alpha'
 
 // The Twilight's Fall unit-upgrade deck. Each card overrides the stats of one
 // generic unit type. Non-mech upgrades are mutually exclusive per unit type
 // (up to one cruiser card, one carrier card, etc. — enforced via a per-type
-// exclusiveGroup); mech upgrades stack. Stats sourced from the ti4lookup CSVs
-// (twilights fall unit variants).
+// exclusiveGroup); mech upgrades stack.
 //
 // `description` is set only when a card has a combat-affecting rule *beyond*
 // its stat/ability changes (e.g. Strike Wing Alpha's AFB bonus). Plain stat
@@ -277,32 +277,46 @@ export const TF_UNIT_UPGRADE_CONFIGS: readonly TfUnitUpgradeConfig[] = [
   },
 
   // ── Fighters ─────────────────────────────────────────────────────────
+  // All three carry the Fighter II movement/fleet-pool clause: fighters fill
+  // ship capacity first and only the excess counts against the fleet pool —
+  // at 1/2 a ship each for Hybrid Crystal Fighter, 1 for the others.
+  // Morphwing's invasion clause and Triune's action-card cancel are out of
+  // combat scope.
   {
     key: 'TF_UPGRADE_HYBRID_CRYSTAL_FIGHTER',
     icon: naaluCollectiveIcon,
     name: 'Hybrid Crystal Fighter',
+    description:
+      "This unit may move without being transported. Each fighter in excess of your ships' capacity counts as 1/2 of a ship against your fleet pool.",
     unitType: 'FIGHTER',
     cost: 0.5,
     combat: [7, 1],
     move: 2,
+    fleetPoolCost: 0.5,
   },
   {
     key: 'TF_UPGRADE_MORPHWING',
     icon: naazRokhaAllianceIcon,
     name: 'Morphwing',
+    description:
+      'This unit may move without being transported. Fighters in excess of your ships’ capacity count against your fleet pool.',
     unitType: 'FIGHTER',
     cost: 0.5,
     combat: [7, 1],
     move: 2,
+    fleetPoolCost: 1,
   },
   {
     key: 'TF_UPGRADE_TRIUNE',
     icon: empyreanIcon,
     name: 'Triune',
+    description:
+      'This unit may move without being transported. Fighters in excess of your ships’ capacity count against your fleet pool.',
     unitType: 'FIGHTER',
     cost: 0.5,
     combat: [7, 1],
     move: 2,
+    fleetPoolCost: 1,
   },
 
   // ── Mech upgrades (stack — a faction may apply all of them) ───────────
@@ -390,6 +404,7 @@ export const TF_UNIT_UPGRADE_CONFIGS: readonly TfUnitUpgradeConfig[] = [
     unitType: 'PDS',
     spaceCannon: [5, 1],
     planetaryShield: true,
+    invokes: [justiciarRailScInvoke],
   },
   {
     key: 'TF_UPGRADE_KEEPER_MATRIX',

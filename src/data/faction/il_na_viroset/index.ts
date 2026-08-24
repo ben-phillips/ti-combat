@@ -2,6 +2,7 @@ import ilNaVirosetIcon from '@/assets/faction/il_na_viroset.svg?raw'
 import { sustainDamage } from '@/data/abilities/general/sustain-damage'
 import type { Faction } from '@/types'
 
+import { enigma } from './enigma'
 import { starlancerXI } from './starlancer-xi'
 
 export const il_na_viroset: Faction = {
@@ -22,7 +23,7 @@ export const il_na_viroset: Faction = {
         UNIT_ABILITIES: {
           SUSTAIN_DAMAGE: true,
         },
-        ABILITIES: [sustainDamage],
+        ABILITIES: [sustainDamage, enigma],
       },
     },
     MECH: {

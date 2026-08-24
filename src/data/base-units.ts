@@ -117,8 +117,10 @@ const baseUnits = {
     },
     UPGRADED: {
       NAME: 'Fighter II',
+      // Keeps the BASE CAPACITY_COST: fighters fill ship capacity first and
+      // only the excess counts against the fleet pool (same model as the
+      // Naalu Hybrid Crystal Fighter, at full cost).
       FLEET_POOL_COST: 1,
-      CAPACITY_COST: null,
       COMBAT: [8, 1],
       MOVE: 2,
     },

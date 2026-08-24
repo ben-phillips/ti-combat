@@ -170,7 +170,14 @@ export interface AdditionalHitPoolDecl {
  *  `shouldTransform(hv, dpu)` is checked against each collection entry's
  *  hit value and dice-per-unit; when it returns true, `createGenerator`
  *  produces the per-unit PMF (length `dpu+1`), and the kernel convolves
- *  `unitCount` independent copies to obtain the entry's PMF. */
+ *  `unitCount` independent copies to obtain the entry's PMF.
+ *
+ *  With `singleDie: true` the transform applies to exactly ONE die instead:
+ *  among the side's entries passing `shouldTransform`, the kernel picks the
+ *  one with the HIGHEST hit value (optimal for transforms whose benefit
+ *  grows with the hit value, e.g. Meld) and replaces its PMF with
+ *  `createGenerator(hv, 1)` for one die convolved with the natural binomial
+ *  over the entry's remaining dice. Other entries roll naturally. */
 export interface CustomRollDecl {
   type: 'CUSTOM_ROLL'
   slotId: SlotId
@@ -178,6 +185,7 @@ export interface CustomRollDecl {
   abilityKey: string
   shouldTransform: (hitValue: number, dicePerUnit: number) => boolean
   createGenerator: (hitValue: number, dicePerUnit: number) => number[]
+  singleDie?: boolean
   wasDeclaration?: boolean
 }
 
@@ -343,6 +351,9 @@ export interface CustomRollTargetSpec {
   key: string
   shouldTransform: (hitValue: number, dicePerUnit: number) => boolean
   createGenerator: (hitValue: number, dicePerUnit: number) => number[]
+  /** Transform exactly one die of the highest-hit-value matching entry
+   *  instead of every matching entry — see `CustomRollDecl.singleDie`. */
+  singleDie?: boolean
 }
 
 /** Two-sided target tuple. Index 0 = OWN, index 1 = OPPONENT.

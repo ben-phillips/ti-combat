@@ -267,6 +267,7 @@ Used in both `isCallable` and `call` contexts. The same `SideApi` class is used 
 
 ```typescript
 getFaction(): FactionKey
+getCombatMode(): CombatMode  // for hooks that receive only a SideApi (e.g. preventDestroy)
 getUnits(unitType: UnitType, options: GetUnitsOptions): UnitId[]
 hasUnit(unitId: UnitId): boolean
 hasUnitType(unitType: UnitType, options: GetUnitsOptions): boolean
