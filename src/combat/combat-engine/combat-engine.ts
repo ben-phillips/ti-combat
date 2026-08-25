@@ -42,6 +42,15 @@ export class CombatEngine {
     const subtreeCache = new Map<string, ExpansionResult>()
     const inProgress = new Set<string>()
 
+    /** Every deferred key still on the DFS stack, so those ancestors will
+     *  absorb the mass themselves when they finalize. */
+    const allDepsInProgress = (result: ExpansionResult): boolean => {
+      for (const dep of result.deferred.keys()) {
+        if (!inProgress.has(dep)) return false
+      }
+      return true
+    }
+
     /**
      * Repair a cached entry whose deferred mass points at ancestors that have
      * since finalized.
@@ -68,14 +77,18 @@ export class CombatEngine {
     ): ExpansionResult | null => {
       const entry = subtreeCache.get(key)
       if (!entry) return null
-      if (entry.deferred.size === 0) return entry
+      // Substitutable as-is when it owes nothing, and equally when it owes
+      // only to ancestors still in flight: folding it into the caller hands
+      // that debt to those same ancestors, which is exactly where the mass
+      // was already headed. Missing this case rejected 83% of repairs — a
+      // dependency that was itself fine, just not yet unconditional.
+      if (entry.deferred.size === 0 || allDepsInProgress(entry)) return entry
       if (seen.has(key)) return null
       seen.add(key)
 
       const outcomes: OutcomeRecord = new Map()
       for (const [k, o] of entry.outcomes) outcomes.set(k, { ...o })
       const deferred = new Map<string, number>()
-      let substituted = false
 
       for (const [dep, mass] of entry.deferred) {
         // Still in flight: that ancestor will absorb the mass itself.
@@ -84,7 +97,6 @@ export class CombatEngine {
           deferred.set(dep, (deferred.get(dep) ?? 0) + mass)
           continue
         }
-        substituted = true
         for (const [k, o] of sub.outcomes) {
           const p = o.probability * mass
           const existing = outcomes.get(k)
@@ -98,7 +110,6 @@ export class CombatEngine {
       }
 
       seen.delete(key)
-      if (!substituted) return null
 
       const result: ExpansionResult = { outcomes, deferred }
       if (deferred.size === 0) {
@@ -106,10 +117,7 @@ export class CombatEngine {
         return result
       }
       // Anything left must still be in flight for this result to be usable.
-      for (const dep of deferred.keys()) {
-        if (!inProgress.has(dep)) return null
-      }
-      return result
+      return allDepsInProgress(result) ? result : null
     }
 
     let nodes = 1

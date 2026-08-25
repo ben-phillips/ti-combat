@@ -129,11 +129,19 @@ a check there too.
   usable while every such k is still in `inProgress` to absorb it. Self-loops
   resolve locally in `finalize`; longer cycles defer to a distant ancestor,
   and when that ancestor finalizes the entry goes stale. Do not simply
-  discard it — `resolveEntry` substitutes the finalized dependency's own
-  distribution via `value(v) = outcomes(v) + Σ deferred(v)[k] · value(k)`,
-  which is exact and makes the entry unconditional (so it is repaired at most
-  once). Discarding instead re-expands the whole subtree: that costs ~6x
-  re-expansion per state on Duranium scenarios.
+  discard it — `resolveEntry` substitutes the dependency's own distribution
+  via `value(v) = outcomes(v) + Σ deferred(v)[k] · value(k)`, which is exact
+  and, when nothing is left owing, makes the entry unconditional (so it is
+  repaired at most once).
+
+- **"Substitutable" is broader than "unconditional" — this distinction is the
+  whole ballgame.** A dependency that owes mass _only to ancestors still in
+  flight_ can be folded into its caller as-is: doing so hands that debt to
+  the same ancestors the mass was already headed for. Treating such a
+  dependency as unresolvable (because it is not yet unconditional) rejected
+  83% of repairs and left a 1.41x re-expansion per state. Honouring it takes
+  expansions to exactly one per unique state — the optimum a full SCC solve
+  would reach, without the linear algebra.
 
 ## Dice-math kernel
 
