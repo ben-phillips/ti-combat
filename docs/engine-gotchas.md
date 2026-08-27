@@ -163,6 +163,36 @@ a check there too.
   it backwards. Same direction in phase-priority overrides: GLS's
   `fightersLast` moves fighters to the end to PROTECT them.)
 
+## Combat engine
+
+- **Unlimited-use repair is the only thing that makes the state graph
+  cyclic.** Without it, combat state decreases monotonically (units are
+  damaged or destroyed, never restored), so the graph is a DAG and
+  `subtreeCache` hits every state exactly once. Duranium Armor
+  (`uses: Infinity` + `isDamaged: false`) can return the state to an earlier
+  one, creating multi-node SCCs. Limited-use repair (Emergency Repairs) is
+  safe — the use count strictly decreases. Before adding an always-on repair
+  ability, expect a state-space cost.
+
+- **A cached entry with non-empty `deferred` is context-dependent.**
+  `deferred[k] = p` means "mass p re-enters ancestor k", so the entry is only
+  usable while every such k is still in `inProgress` to absorb it. Self-loops
+  resolve locally in `finalize`; longer cycles defer to a distant ancestor,
+  and when that ancestor finalizes the entry goes stale. Do not simply
+  discard it — `resolveEntry` substitutes the dependency's own distribution
+  via `value(v) = outcomes(v) + Σ deferred(v)[k] · value(k)`, which is exact
+  and, when nothing is left owing, makes the entry unconditional (so it is
+  repaired at most once).
+
+- **"Substitutable" is broader than "unconditional" — this distinction is the
+  whole ballgame.** A dependency that owes mass _only to ancestors still in
+  flight_ can be folded into its caller as-is: doing so hands that debt to
+  the same ancestors the mass was already headed for. Treating such a
+  dependency as unresolvable (because it is not yet unconditional) rejected
+  83% of repairs and left a 1.41x re-expansion per state. Honouring it takes
+  expansions to exactly one per unique state — the optimum a full SCC solve
+  would reach, without the linear algebra.
+
 ## Dice-math kernel
 
 - **All conditional ±1 flips resolve in ONE joint pass after the attacker ×

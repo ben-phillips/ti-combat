@@ -41,6 +41,85 @@ export class CombatEngine {
     // keys are all currently in-progress.
     const subtreeCache = new Map<string, ExpansionResult>()
     const inProgress = new Set<string>()
+
+    /** Every deferred key still on the DFS stack, so those ancestors will
+     *  absorb the mass themselves when they finalize. */
+    const allDepsInProgress = (result: ExpansionResult): boolean => {
+      for (const dep of result.deferred.keys()) {
+        if (!inProgress.has(dep)) return false
+      }
+      return true
+    }
+
+    /**
+     * Repair a cached entry whose deferred mass points at ancestors that have
+     * since finalized.
+     *
+     * `deferred[k] = p` means "mass p re-enters ancestor k and continues from
+     * there", so once k's own distribution is known,
+     *
+     *     value(v) = outcomes(v) + Sum_k deferred(v)[k] * value(k)
+     *
+     * resolves v without re-expanding its subtree. Deferred keys are always
+     * strict DFS ancestors (they originate from `cycleTo`, which only fires
+     * on keys currently in `inProgress`), so the recursion is well-founded;
+     * `seen` guards against a malformed graph rather than an expected one.
+     *
+     * A fully resolved entry carries no deferred mass, making it
+     * context-independent, so it replaces the cached entry and every later
+     * lookup hits it directly — the repair is paid for at most once per state.
+     * Returns null when the entry cannot be made usable here, in which case
+     * the caller falls through to a full re-expansion.
+     */
+    const resolveEntry = (
+      key: string,
+      seen: Set<string>,
+    ): ExpansionResult | null => {
+      const entry = subtreeCache.get(key)
+      if (!entry) return null
+      // Substitutable as-is when it owes nothing, and equally when it owes
+      // only to ancestors still in flight: folding it into the caller hands
+      // that debt to those same ancestors, which is exactly where the mass
+      // was already headed. Missing this case rejected 83% of repairs — a
+      // dependency that was itself fine, just not yet unconditional.
+      if (entry.deferred.size === 0 || allDepsInProgress(entry)) return entry
+      if (seen.has(key)) return null
+      seen.add(key)
+
+      const outcomes: OutcomeRecord = new Map()
+      for (const [k, o] of entry.outcomes) outcomes.set(k, { ...o })
+      const deferred = new Map<string, number>()
+
+      for (const [dep, mass] of entry.deferred) {
+        // Still in flight: that ancestor will absorb the mass itself.
+        const sub = inProgress.has(dep) ? null : resolveEntry(dep, seen)
+        if (!sub) {
+          deferred.set(dep, (deferred.get(dep) ?? 0) + mass)
+          continue
+        }
+        for (const [k, o] of sub.outcomes) {
+          const p = o.probability * mass
+          const existing = outcomes.get(k)
+          if (existing) existing.probability += p
+          else outcomes.set(k, { ...o, probability: p })
+        }
+        // A partially resolved dependency can still owe mass further up.
+        for (const [k, p] of sub.deferred) {
+          deferred.set(k, (deferred.get(k) ?? 0) + p * mass)
+        }
+      }
+
+      seen.delete(key)
+
+      const result: ExpansionResult = { outcomes, deferred }
+      if (deferred.size === 0) {
+        subtreeCache.set(key, result)
+        return result
+      }
+      // Anything left must still be in flight for this result to be usable.
+      return allDepsInProgress(result) ? result : null
+    }
+
     let nodes = 1
     let finalNodes = 1
 
@@ -79,6 +158,15 @@ export class CombatEngine {
           if (usable) {
             if (cacheKey) inProgress.delete(cacheKey)
             return cached
+          }
+
+          // Stale: some deferred dependency has finalized, so no ancestor is
+          // left to absorb its mass. Substituting the resolved dependency
+          // back in salvages the entry instead of re-expanding the subtree.
+          const resolved = resolveEntry(key, new Set())
+          if (resolved) {
+            if (cacheKey) inProgress.delete(cacheKey)
+            return resolved
           }
         }
 
