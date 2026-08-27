@@ -326,11 +326,17 @@ setUnitAbilityLost(ability: UnitAbility, reason: string, target?: UnitBaseType |
 removeUnitAbilityLost(ability: UnitAbility, reason: string, target?: UnitBaseType | UnitCategory): void
 setUnitAbilityCannotBeUsed(ability: UnitAbility, reason: string, target?: UnitBaseType | UnitCategory): void
 removeUnitAbilityCannotBeUsed(ability: UnitAbility, reason: string, target?: UnitBaseType | UnitCategory): void
+
+// Carve one unit type back OUT of every restriction (both layers) coming from `reason`
+setUnitAbilityRestrictionImmunity(reason: string, unitType: UnitBaseType): void
+removeUnitAbilityRestrictionImmunity(reason: string, unitType: UnitBaseType): void
 ```
 
 `reason` is the ability key that caused the restriction. Used to cleanly remove restrictions without affecting other abilities' restrictions.
 
 `target` can be a specific `UnitBaseType` (e.g., `'MECH'`) or a `UnitCategory` (`'SHIPS'`, `'NON_FIGHTER_SHIPS'`, `'GROUND_FORCES'`, `'STRUCTURES'`). Categories are resolved at check time, so changes to category membership are automatically reflected.
+
+**Immunity** is the inverse of a restriction: `setUnitAbilityRestrictionImmunity('ENTROPIC_SCAR', 'FLAGSHIP')` makes flagships ignore every restriction that scar added, blanket ones included. It resolves lazily alongside the restrictions themselves, so it can be declared before or after the restricting ability's PREPARE (see the Il Na Viroset flagship, `il_na_viroset/enigma.ts`).
 
 **lost vs cannotBeUsed**: "lost" means the ability is gone (e.g., Publicize Weapon Schematics removes War Sun sustain). "cannotBeUsed" means it's still there but blocked (e.g., Fourth Moon prevents sustain from firing). Both are checked by Sustain Damage before firing.
 

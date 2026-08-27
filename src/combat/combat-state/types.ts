@@ -111,10 +111,21 @@ export interface RestrictionEntry {
   category?: UnitCategory
 }
 
-/** Two-layer restriction system for unit abilities */
+/** "This unit type ignores every restriction coming from `reason`."
+ *  Applied when the raw entries are resolved, so it is order-independent —
+ *  the immunity can be declared before or after the restriction itself
+ *  (e.g. the Il Na Viroset flagship ignoring an Entropic Scar). */
+export interface RestrictionImmunity {
+  reason: string
+  unitType: UnitBaseType
+}
+
+/** Two-layer restriction system for unit abilities, plus per-source
+ *  immunities that carve unit types back out of both layers. */
 export interface UnitAbilityRestrictions {
   cannotBeUsed?: Partial<Record<UnitAbility, RestrictionEntry[]>>
   lost?: Partial<Record<UnitAbility, RestrictionEntry[]>>
+  immune?: RestrictionImmunity[]
 }
 
 /** Resolved form of `UnitAbilityRestrictions`, derived from the raw

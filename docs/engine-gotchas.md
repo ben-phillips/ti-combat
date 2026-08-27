@@ -83,6 +83,17 @@ a check there too.
   first — the TAIL dies first.** The unit spared by cancelling one hit is
   `result[0]`, not `result[n-1]` (see Divinity's `savedByHitCancel`).
 
+- **A blanket restriction stops being blanket once anything is immune to
+  it.** `setUnitAbilityRestrictionImmunity(reason, unitType)` makes a
+  target-less restriction resolve into the concrete unit types present
+  minus the immune ones, so `isAbilityBlocked` (which only reports the
+  `'ALL'` case) turns false for that side. Per-type dice collection still
+  filters correctly; what slips through is the hard-block path that drops
+  config-level `addDiceGroup` decls for a fully-blocked side (see
+  `tests/engine/disabled-unit-ability-blocks-custom-dice.test.ts`). Only
+  matters when a side fields both an immune unit and a config ability
+  adding custom dice for a restricted unit ability.
+
 - **`getAvailableAbilities` feeds BOTH the panel and the engine.** Hiding a
   slot removes engine behavior, not just UI. The `ADVANCED` slot holds the
   phase drivers (AFB, Space Cannon, Bombardment, Retreat, Fleet Pool,

@@ -581,6 +581,28 @@ export class SideApi {
     )
   }
 
+  /** `unitType` ignores every `lost` / `cannotBeUsed` restriction coming
+   *  from `reason` — blanket ones included. Resolved lazily, so it may be
+   *  declared before or after the restriction itself (see the Il Na Viroset
+   *  flagship ignoring an Entropic Scar). */
+  setUnitAbilityRestrictionImmunity(reason: string, unitType: UnitBaseType) {
+    CombatSideState.addRestrictionImmunity(
+      this.state,
+      this._side,
+      reason,
+      unitType,
+    )
+  }
+
+  removeUnitAbilityRestrictionImmunity(reason: string, unitType: UnitBaseType) {
+    CombatSideState.removeRestrictionImmunity(
+      this.state,
+      this._side,
+      reason,
+      unitType,
+    )
+  }
+
   addSubtype(unitId: UnitId, subtype: UnitVariantId): UnitType | undefined {
     const newKey = CombatSideState.addSubtype(this._sideData, unitId, subtype)
     if (!newKey) return undefined

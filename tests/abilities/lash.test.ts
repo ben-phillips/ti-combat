@@ -94,4 +94,51 @@ describe('TF_LASH', () => {
     expect(t.abilityLog('TF_LASH')).toHaveLength(0)
     expect(t.defender.units.WAR_SUN).toHaveLength(1)
   })
+
+  it("cannot destroy a pricier flagship than Il Na Viroset's Enigma", () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'IL_NA_VIROSET',
+        // Enigma costs 7 — cheaper than every standard 8-cost flagship
+        units: { FLAGSHIP: 1 },
+        abilities: { TF_LASH: true },
+      },
+      defender: { faction: 'AVARICE_REX', units: { FLAGSHIP: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    // 2 hits: the Enigma sustains the first, dies to the second
+    t.advanceRound({ attacker: 2, defender: 0 })
+
+    expect(t.attacker.units.FLAGSHIP ?? []).toHaveLength(0)
+    expect(t.abilityLog('TF_LASH')).toHaveLength(0)
+    expect(t.defender.units.FLAGSHIP).toHaveLength(1)
+  })
+
+  it('destroys a Dawncrusher when a carrier of equal cost dies', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CARRIER: 1 },
+        abilities: { TF_LASH: true },
+      },
+      defender: {
+        faction: 'AVARICE_REX',
+        units: { DREADNOUGHT: 1 },
+        // Dawncrusher drops the dreadnought's cost from 4 to 3
+        abilities: { TF_UPGRADE_DAWNCRUSHER: true },
+      },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 1, defender: 0 })
+
+    expect(t.attacker.units.CARRIER ?? []).toHaveLength(0)
+    expect(t.abilityLog('TF_LASH')).not.toHaveLength(0)
+    // Carrier cost (3) === Dawncrusher cost (3) → Lash destroys it outright,
+    // sustain and Spark immunity notwithstanding
+    expect(t.defender.units.DREADNOUGHT ?? []).toHaveLength(0)
+  })
 })
