@@ -19,7 +19,10 @@ describe.forEachSide('TF_COLADA', () => {
     t.advanceTo('SPACE_COMBAT')
     t.advanceRound()
 
-    expect(t.dicePool().attacker).toContainDice('TF_COLADA', [3, 1])
+    // The die joins the flagship's own roll rather than forming a separate
+    // group, so per-unit effects treat it as one 2-dice unit.
+    expect(t.dicePool().attacker).toContainDice('FLAGSHIP', [3, 2])
+    expect(t.dicePool().attacker).toContainDice('CARRIER', [9, 1])
   })
 
   it('does nothing when no fielded unit has a capacity value', () => {
@@ -38,7 +41,7 @@ describe.forEachSide('TF_COLADA', () => {
     t.advanceRound()
 
     expect(t.abilityLog('TF_COLADA')).toHaveLength(0)
-    expect(t.dicePool().attacker.TF_COLADA).toBeUndefined()
+    expect(t.dicePool().attacker).toContainDice('CRUISER', [7, 1])
   })
 
   it('re-picks the target when the best carrier dies', () => {
@@ -60,13 +63,13 @@ describe.forEachSide('TF_COLADA', () => {
     })
 
     t.advanceTo('SPACE_COMBAT')
-    // Round 1: the flagship dies — its die was rolled at 3.
+    // Round 1: the flagship rolls 2 dice at 3, then dies.
     t.advanceRound({ attacker: 1, defender: 0 })
     expect(t.attacker.units.FLAGSHIP).toBeUndefined()
 
     // Round 2: the bonus falls through to the carrier (combat 9).
     t.advanceRound()
-    expect(t.dicePool().attacker).toContainDice('TF_COLADA', [9, 1])
+    expect(t.dicePool().attacker).toContainDice('CARRIER', [9, 2])
   })
 
   it('each transported Colada mech grants a die', () => {
@@ -83,7 +86,8 @@ describe.forEachSide('TF_COLADA', () => {
     t.advanceTo('SPACE_COMBAT')
     t.advanceRound()
 
-    // One [3, 1] group per mech — the invoke fires once per unit instance.
-    expect(t.dicePool().attacker).toContainDice('TF_COLADA', [3, 1], [3, 1])
+    // One die per mech — the invoke fires once per unit instance, and both
+    // dice pile onto the same best target.
+    expect(t.dicePool().attacker).toContainDice('FLAGSHIP', [3, 3])
   })
 })

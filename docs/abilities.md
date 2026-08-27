@@ -364,9 +364,9 @@ updateAbilityConfig(key: string, updates: Record<string, unknown>): void
 There is no separate "DiceApi" object. Dice are modified during `BEFORE_DICE_ROLL` / `BEFORE_UNIT_ABILITY_ROLL` by calling these methods directly on `ctx.api.own` / `ctx.api.opponent`. Each call queues a modifier that the dice-math kernel applies (see `docs/dice-math.md`).
 
 ```typescript
-addDiceCount(count: number, target: 'BEST' | 'WORST' = 'BEST'): void  // Add dice to best/worst (lowest/highest hit value) source
-setDiceCount(count: number, unitType: UnitType): void                 // Set per-unit dice count for a unit type
-addDiceGroup(diceGroup: DiceGroup): void                              // Add a new dice group keyed under the current ability
+addDiceCount(count, target?: 'BEST' | 'WORST', unitTypes?): void  // Add dice to best/worst (lowest/highest hit value) source, optionally restricted to `unitTypes` (base types; empty list = no-op). The dice land ON the chosen unit's entry, so per-unit effects (Crown of Thalnos' safe reroll) see them
+setDiceCount(count: number, unitType: UnitType): void             // Set per-unit dice count for a unit type
+addDiceGroup(diceGroup: DiceGroup): void                          // Add a new dice group keyed under the current ability
 ```
 
 `DiceGroup` is `[hitValue, baseDice]` or `[hitValue, baseDice, bonusDice]` (`src/types/die.ts`). Hit value is the threshold — a die must roll ≥ hitValue to hit. Total dice per unit = `baseDice + bonusDice`.

@@ -57,6 +57,9 @@ export interface AddDiceCountDecl {
   abilityKey: string
   count: number
   target: 'BEST' | 'WORST'
+  /** When set, only these base types are eligible to receive the dice.
+   *  An empty list makes the modifier a no-op. */
+  unitTypes?: readonly UnitBaseType[]
   wasDeclaration?: boolean
 }
 
