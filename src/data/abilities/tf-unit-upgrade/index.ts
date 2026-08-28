@@ -24,6 +24,7 @@ import xxchaKingdomIcon from '@/assets/faction/xxcha_kingdom.svg?raw'
 import yinBrotherhoodIcon from '@/assets/faction/yin_brotherhood.svg?raw'
 import yssarilTribesIcon from '@/assets/faction/yssaril_tribes.svg?raw'
 import type { Ability } from '@/combat'
+import type { UnitBaseType } from '@/types'
 
 import {
   createTfUnitUpgrade,
@@ -421,5 +422,13 @@ export const TF_UNIT_UPGRADE_CONFIGS: readonly TfUnitUpgradeConfig[] = [
   },
 ]
 
-export const TF_UNIT_UPGRADES: readonly Ability[] =
-  TF_UNIT_UPGRADE_CONFIGS.map(createTfUnitUpgrade)
+// Cards paired with the unit type they upgrade: the registration site turns
+// the type into the panel's sub-header, so the deck renders as one group per
+// unit type instead of one flat list.
+export const TF_UNIT_UPGRADE_ENTRIES: readonly {
+  unitType: UnitBaseType
+  ability: Ability
+}[] = TF_UNIT_UPGRADE_CONFIGS.map(cfg => ({
+  unitType: cfg.unitType,
+  ability: createTfUnitUpgrade(cfg),
+}))

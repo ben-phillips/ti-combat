@@ -61,12 +61,18 @@ function fuzzyMatch(haystack: string, needle: string): boolean {
   return false
 }
 
+// Per-entry sub-header wins over the slot's own (TF unit upgrades group by
+// unit type, so every card in the slot carries its own).
+function subcategoryOf(reg: RegisteredAbility): string | undefined {
+  return reg.subcategory ?? SLOT_DISPLAY[reg.slot].subcategory
+}
+
 function matchesSearch(reg: RegisteredAbility, query: string): boolean {
   const haystack = [
     reg.ability.name,
     reg.ability.description ?? '',
     SLOT_DISPLAY[reg.slot].category,
-    SLOT_DISPLAY[reg.slot].subcategory ?? '',
+    subcategoryOf(reg) ?? '',
   ]
     .join(' ')
     .toLowerCase()
@@ -77,6 +83,10 @@ function matchesSearch(reg: RegisteredAbility, query: string): boolean {
 function slotIndex(slot: AbilitySlot): number {
   const i = SLOT_ORDER.indexOf(slot)
   return i === -1 ? Infinity : i
+}
+
+function firstSlotIndex(regs: RegisteredAbility[] | undefined): number {
+  return Math.min(...(regs ?? []).map(reg => slotIndex(reg.slot)))
 }
 
 // Slots where the faction icon would just repeat what the FACTION header
@@ -144,24 +154,28 @@ export function AbilitiesPanel({
       {orderedCategories.map(category => {
         const entries = byCategory[category] ?? []
 
-        if (category === 'FACTION') {
-          // Group by slot (not subcategory string) so SLOT_ORDER governs the
-          // sub-headers — keeps a single source of truth for ordering.
-          const bySlot = groupBy(entries, reg => reg.slot)
-          const slots = (Object.keys(bySlot) as AbilitySlot[]).sort(
-            (a, b) => slotIndex(a) - slotIndex(b),
+        if (entries.some(reg => subcategoryOf(reg) !== undefined)) {
+          const bySubcategory = groupBy(
+            entries,
+            reg => subcategoryOf(reg) ?? 'ABILITY',
+          )
+          // SLOT_ORDER governs cross-slot sub-headers (FACTION); within one
+          // slot the sort is stable, so groups keep registration order — which
+          // for the TF unit-upgrade deck is the UI's unit ordering.
+          const subcategories = Object.keys(bySubcategory).sort(
+            (a, b) =>
+              firstSlotIndex(bySubcategory[a]) -
+              firstSlotIndex(bySubcategory[b]),
           )
 
           return (
             <div key={category}>
               <h6 className={styles.categoryLabel}>{category}</h6>
-              {slots.map(slot => (
-                <div key={slot}>
-                  <div className={styles.subcategoryLabel}>
-                    {SLOT_DISPLAY[slot].subcategory ?? 'ABILITY'}
-                  </div>
+              {subcategories.map(subcategory => (
+                <div key={subcategory}>
+                  <div className={styles.subcategoryLabel}>{subcategory}</div>
                   <div className={styles.abilitiesList}>
-                    {bySlot[slot]?.map(reg =>
+                    {bySubcategory[subcategory]?.map(reg =>
                       renderAbilityConfig(
                         reg,
                         readContext,

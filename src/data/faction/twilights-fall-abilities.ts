@@ -17,6 +17,7 @@ import universitiesOfJolNarIcon from '@/assets/faction/universities_of_jol_nar.s
 import yinBrotherhoodIcon from '@/assets/faction/yin_brotherhood.svg?raw'
 import yssarilTribesIcon from '@/assets/faction/yssaril_tribes.svg?raw'
 import type { Ability, RegisteredAbility } from '@/combat'
+import { UNIT_DISPLAY_NAMES } from '@/constants/units'
 import { solarFlare } from '@/data/abilities/action-card/solar-flare'
 import { heartOfIxth } from '@/data/abilities/relic/heart-of-ixth'
 import {
@@ -41,7 +42,7 @@ import { mirrorGenome } from '@/data/abilities/tf-genome/mirror-genome'
 import { splittingGenome } from '@/data/abilities/tf-genome/splitting-genome'
 import { valiantGenome } from '@/data/abilities/tf-genome/valiant-genome'
 import { intelligenceUnshackled } from '@/data/abilities/tf-paradigm/intelligence-unshackled'
-import { TF_UNIT_UPGRADES } from '@/data/abilities/tf-unit-upgrade'
+import { TF_UNIT_UPGRADE_ENTRIES } from '@/data/abilities/tf-unit-upgrade'
 
 import { raidFormation } from './argent_flight/raid-formation'
 import { trrakanAunZulok } from './argent_flight/trrakan-aun-zulok'
@@ -405,7 +406,14 @@ export const TF_SHARED_REGISTERED: readonly RegisteredAbility[] = [
   { slot: 'TF_ACTION_CARD', ability: spark },
 
   // ── Unit Upgrades ────────────────────────────────────────────────────
-  ...TF_UNIT_UPGRADES.map(
-    ability => ({ slot: 'TF_UNIT_UPGRADE', ability }) as RegisteredAbility,
+  // The deck spans every unit type, so each card carries its unit type as the
+  // panel sub-header (the list is already ordered by unit type — see the deck).
+  ...TF_UNIT_UPGRADE_ENTRIES.map(
+    ({ unitType, ability }) =>
+      ({
+        slot: 'TF_UNIT_UPGRADE',
+        subcategory: UNIT_DISPLAY_NAMES[unitType],
+        ability,
+      }) as RegisteredAbility,
   ),
 ]

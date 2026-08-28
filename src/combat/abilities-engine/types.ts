@@ -589,4 +589,8 @@ export interface Ability<Params extends Record<string, unknown> = any> {
 export interface RegisteredAbility {
   readonly ability: Ability
   readonly slot: AbilitySlot
+  /** Per-entry sub-header for slots whose cards split into groups the slot
+   *  itself can't express (TF unit upgrades group by unit type). Overrides
+   *  `SLOT_DISPLAY[slot].subcategory`. */
+  readonly subcategory?: string
 }

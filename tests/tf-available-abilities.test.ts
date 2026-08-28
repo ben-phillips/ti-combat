@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { UNIT_DISPLAY_NAMES } from '@/constants/units'
 import { twilightsFallFactions } from '@/data/faction/twilights-fall'
 import { CombatSetup } from '@/hooks/combat-setup'
 import { getAvailableAbilities } from '@/hooks/combat-setup/get-available-abilities'
+import type { UnitBaseType } from '@/types'
 
 import { combatTest } from './utils/combat-test'
 
@@ -78,6 +80,32 @@ describe("Twilight's Fall available abilities", () => {
         .map(r => r.ability.name)
       expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
     }
+  })
+
+  it('tags every TF unit upgrade with its unit type as the panel sub-header', () => {
+    const regs = getAvailableAbilities('attacker', 'AVARICE_REX')
+    const upgrades = regs.filter(r => r.slot === 'TF_UNIT_UPGRADE')
+    const typeOf = (r: (typeof upgrades)[number]) =>
+      r.ability.exclusiveGroup?.replace('TF_UNIT_UPGRADE_', '') ?? 'MECH'
+    for (const r of upgrades) {
+      expect(r.subcategory, `${r.ability.name} is missing a sub-header`).toBe(
+        UNIT_DISPLAY_NAMES[typeOf(r) as UnitBaseType],
+      )
+    }
+    // Every unit type in the deck gets its own group, no stray extras.
+    const groups = [...new Set(upgrades.map(r => r.subcategory))]
+    expect(groups).toEqual([
+      'Flagship',
+      'War Sun',
+      'Dreadnought',
+      'Carrier',
+      'Cruiser',
+      'Destroyer',
+      'Fighter',
+      'Mech',
+      'Infantry',
+      'PDS',
+    ])
   })
 
   it('neutral in a TF session matches the TF slot layout', () => {
