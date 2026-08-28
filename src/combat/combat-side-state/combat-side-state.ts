@@ -432,6 +432,14 @@ function buildResolvedForSide(
   const variantKeys = new Set<UnitType>()
   for (const key of Object.values(s.unitType)) variantKeys.add(key)
 
+  // reason -> unit base types that ignore restrictions from that source.
+  const immuneByReason = new Map<string, Set<UnitBaseType>>()
+  for (const { reason, unitType } of raw.immune ?? []) {
+    const set = immuneByReason.get(reason) ?? new Set<UnitBaseType>()
+    set.add(unitType)
+    immuneByReason.set(reason, set)
+  }
+
   const addToLayer = (
     target: ResolvedRestrictionsLayer,
     ability: UnitAbility,
@@ -440,22 +448,42 @@ function buildResolvedForSide(
     const existing = target.get(ability)
     if (existing === 'ALL') return
 
+    const immune = immuneByReason.get(entry.reason)
+    const isImmune = (baseType: string) =>
+      immune !== undefined && immune.has(baseType as UnitBaseType)
+
     if (!entry.unitType && !entry.category) {
-      target.set(ability, 'ALL')
+      if (!immune) {
+        target.set(ability, 'ALL')
+        return
+      }
+      // Blanket entry with an immune unit type on the side: expand it into
+      // the concrete types present instead of 'ALL', minus the immune ones.
+      const set = existing ?? new Set<UnitType>()
+      for (const key of variantKeys) {
+        const baseType = parseVariantId(key).type
+        if (isImmune(baseType)) continue
+        set.add(key)
+        set.add(baseType as UnitType)
+      }
+      target.set(ability, set)
       return
     }
 
     const set = existing ?? new Set<UnitType>()
 
     if (entry.unitType) {
-      set.add(entry.unitType as UnitType)
-      // A bare baseType entry also restricts every variant of that type.
-      for (const key of variantKeys) {
-        if (parseVariantId(key).type === entry.unitType) set.add(key)
+      if (!isImmune(entry.unitType)) {
+        set.add(entry.unitType as UnitType)
+        // A bare baseType entry also restricts every variant of that type.
+        for (const key of variantKeys) {
+          if (parseVariantId(key).type === entry.unitType) set.add(key)
+        }
       }
     } else if (entry.category) {
       for (const key of variantKeys) {
         const baseType = parseVariantId(key).type
+        if (isImmune(baseType)) continue
         if (isCategoryMember(s, entry.category, baseType)) {
           set.add(key)
           set.add(baseType as UnitType)
@@ -583,7 +611,37 @@ function removeRestrictionEntry(
     [layer]: hasEntries ? newLayerData : undefined,
   }
 
-  if (!result.lost && !result.cannotBeUsed) return undefined
+  if (!result.lost && !result.cannotBeUsed && !result.immune) return undefined
+  return result
+}
+
+function addImmunityEntry(
+  restrictions: UnitAbilityRestrictions | undefined,
+  reason: string,
+  unitType: UnitBaseType,
+): UnitAbilityRestrictions {
+  const current = restrictions ?? {}
+  const entries = current.immune ?? []
+  if (entries.some(e => e.reason === reason && e.unitType === unitType)) {
+    return current
+  }
+  return { ...current, immune: [...entries, { reason, unitType }] }
+}
+
+function removeImmunityEntry(
+  restrictions: UnitAbilityRestrictions | undefined,
+  reason: string,
+  unitType: UnitBaseType,
+): UnitAbilityRestrictions | undefined {
+  if (!restrictions?.immune) return restrictions
+  const filtered = restrictions.immune.filter(
+    e => e.reason !== reason || e.unitType !== unitType,
+  )
+  const result = {
+    ...restrictions,
+    immune: filtered.length > 0 ? filtered : undefined,
+  }
+  if (!result.lost && !result.cannotBeUsed && !result.immune) return undefined
   return result
 }
 
@@ -1683,6 +1741,39 @@ export class CombatSideState {
       reason,
       isCategory ? undefined : (target as UnitBaseType),
       isCategory ? (target as UnitCategory) : undefined,
+    )
+    invalidateResolvedRestrictions(state)
+  }
+
+  /** Make `unitType` ignore every restriction whose `reason` matches —
+   *  both layers, blanket entries included. Resolved lazily, so the order
+   *  against the restriction's own PREPARE doesn't matter. */
+  static addRestrictionImmunity(
+    state: CombatStateData,
+    side: CombatSide,
+    reason: string,
+    unitType: UnitBaseType,
+  ): void {
+    const s = state[side]
+    s.unitAbilityRestrictions = addImmunityEntry(
+      s.unitAbilityRestrictions,
+      reason,
+      unitType,
+    )
+    invalidateResolvedRestrictions(state)
+  }
+
+  static removeRestrictionImmunity(
+    state: CombatStateData,
+    side: CombatSide,
+    reason: string,
+    unitType: UnitBaseType,
+  ): void {
+    const s = state[side]
+    s.unitAbilityRestrictions = removeImmunityEntry(
+      s.unitAbilityRestrictions,
+      reason,
+      unitType,
     )
     invalidateResolvedRestrictions(state)
   }

@@ -57,6 +57,43 @@ a check there too.
   some not) must mark ALL of them external, or the non-external ones
   silently never fire (see `wrapInvoke` in `tf-genome/clever-genome.ts`).
 
+- **Config abilities resolve before unit-attached abilities within a timing
+  pass.** A unit ability's PREPARE cannot pre-empt an ADVANCED phase driver's
+  PREPARE — e.g. a flagship text zeroing `CAPACITY_COST` runs AFTER the
+  capacity driver has already removed the excess units. Model such texts at
+  the stats level instead (A Strangled Whisper is the `FREE_CARGO` stat on
+  the flagship, consumed by the capacity driver itself, not an invoke).
+
+- **TF unit-upgrade cards MUST register ahead of the base slots.**
+  `getAvailableAbilities` deliberately returns `[...tfUpgrades, ...base,
+...]`: the cards' PREPARE applies the stat block (capacity, Fighter-II-style
+  `FLEET_POOL_COST`) that the ADVANCED drivers' own PREPARE enforcement then
+  reads — they are the TF analog of TI4's build-time UPGRADED stats. Re-appending them after `base` silently makes
+  Capacity/Fleet Pool enforce against the un-upgraded stats (fighters
+  removed despite a fleet-pool fallback). Panel display is unaffected —
+  slots are grouped via SLOT_DISPLAY, not list order.
+
+- **Never multiply a possibly-infinite stat by a unit count without checking
+  the count first.** `Infinity * 0 = NaN` poisons every comparison
+  downstream (`computeTotalCapacity` skips zero-count types for exactly this
+  reason; a NaN total made capacity cleanup silently stop removing anything
+  once the infinite carrier died).
+
+- **`getAssignHitsTargets(n)` returns victims in pool order, most-protected
+  first — the TAIL dies first.** The unit spared by cancelling one hit is
+  `result[0]`, not `result[n-1]` (see Divinity's `savedByHitCancel`).
+
+- **A blanket restriction stops being blanket once anything is immune to
+  it.** `setUnitAbilityRestrictionImmunity(reason, unitType)` makes a
+  target-less restriction resolve into the concrete unit types present
+  minus the immune ones, so `isAbilityBlocked` (which only reports the
+  `'ALL'` case) turns false for that side. Per-type dice collection still
+  filters correctly; what slips through is the hard-block path that drops
+  config-level `addDiceGroup` decls for a fully-blocked side (see
+  `tests/engine/disabled-unit-ability-blocks-custom-dice.test.ts`). Only
+  matters when a side fields both an immune unit and a config ability
+  adding custom dice for a restricted unit ability.
+
 - **`getAvailableAbilities` feeds BOTH the panel and the engine.** Hiding a
   slot removes engine behavior, not just UI. The `ADVANCED` slot holds the
   phase drivers (AFB, Space Cannon, Bombardment, Retreat, Fleet Pool,
@@ -86,13 +123,16 @@ a check there too.
   this; derived-group targets (Starlancer XI's `spaceCombatParticipating`)
   rely on the post-derivation re-apply — don't remove it.
 
-- **`declareParam` sourced params sync only at reconcile.** A runtime
-  `updateAbilityConfig` to a source list (e.g.
-  `SETTINGS.spaceCombatParticipating`) does not propagate to params sourced
-  from it (fleet pool, sustain priorities, unit priority). Update the
-  dependent ability's config directly at runtime too (see Starlancer XI
-  updating `SUSTAIN_DAMAGE.spacePriority` and
-  `UNIT_PRIORITY.spaceUnitPriority`).
+- **`declareParam` sourced params sync only at reconcile — but the reconciled
+  value SURVIVES into the engine run.** A runtime `updateAbilityConfig` to a
+  source list (e.g. `SETTINGS.spaceCombatParticipating`) does not propagate to
+  params sourced from it (fleet pool, sustain priorities, unit priority).
+  When the addition came from a `declareParamChange` at reconcile, the
+  dependent lists already contain it and `resetSettingsToBase` does not touch
+  them — only the SETTINGS group itself needs the runtime restore (Starlancer
+  XI restores `spaceCombatParticipating` in PREPARE and nothing else). Update
+  a dependent ability's config at runtime only for additions that never went
+  through reconcile.
 
 - **`SETTINGS.ships` and `SETTINGS.spaceCombatParticipating` are distinct.**
   `ships` cascades (via `onParamSet`) into `nonFighterShips`,
@@ -100,6 +140,16 @@ a check there too.
   `spaceCombatParticipating` directly grants combat participation WITHOUT
   ship-ness (fleet pool, capacity, SCO targeting untouched) — that's how
   Starlancer XI mechs fight in space from the ground.
+
+- **Capacity and Fleet Pool split Fighter-II-style cargo between them.**
+  Units with BOTH `CAPACITY_COST` and `FLEET_POOL_COST` (Fighter II, the TF
+  fighter cards) fill ship capacity first; only the excess is priced by the
+  fleet-pool driver. Capacity enforcement therefore EXCLUDES them from its
+  cost total — counting them would evict other cargo (infantry) for an
+  overflow the fleet pool already handles — and the fleet-pool driver
+  measures the excess against the ships' PRINTED capacity even when the
+  Capacity enforcement toggle is off (the toggle governs removal of illegal
+  cargo, not how much capacity the ships have).
 
 - **Sustain Damage has per-mode allow-lists.** A unit sustains only if its
   variant is in `SUSTAIN_DAMAGE.spacePriority` / `groundPriority` (sourced
@@ -161,6 +211,13 @@ a check there too.
   probabilities (`toHaveBranches`), not log entries.
 
 ## Test harness
+
+- **Explicit test params for `declareParam` lists REPLACE the reconciled
+  value.** `prepareSimulationConfig` snapshots user-supplied params before
+  reconcile and restores them verbatim after, so a test passing
+  `targets: [['FIGHTER', false]]` gets exactly that one-entry list — the
+  other fielded types are NOT appended with their defaults. Always pass the
+  COMPLETE list when overriding a synced list param in a test.
 
 - **`advanceRound` hit specs are hits RECEIVED, not produced.**
   `advanceRound({ attacker: 2 })` picks the branch where the attacker's

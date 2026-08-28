@@ -79,10 +79,12 @@ function applyAddDiceCount(
   mod: AddDiceCountDecl,
 ): void {
   const isBest = mod.target === 'BEST'
+  const allowed = mod.unitTypes && new Set<string>(mod.unitTypes)
   let bestVariant: UnitBaseType | undefined
   let bestEntry: [number, number, number] | undefined
   let bestHitValue = isBest ? Infinity : -Infinity
   for (const variant of Object.keys(collection) as UnitBaseType[]) {
+    if (allowed && !allowed.has(variant)) continue
     const entries = collection[variant]
     if (!entries || entries.length === 0) continue
     for (const entry of entries) {

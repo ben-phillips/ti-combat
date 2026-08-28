@@ -112,7 +112,7 @@ math-kernel `Modifier` union. Each modifier carries a sided target tuple
 | `CONDITIONAL_MODIFIER` | `{ key, ownerSide, bonus, limit, source? }`                                  |
 | `ADDITIONAL_HIT_POOL`  | `{ key, units: UnitType[], transform: (count) => HitPool }`                  |
 | `ROLL_TRIGGER`         | `{ key, slotId, faces: number[], units?: UnitType[] }` (+ effect)            |
-| `CUSTOM_ROLL`          | `{ key, shouldTransform(hv, dpu), createGenerator(hv, dpu) }`                |
+| `CUSTOM_ROLL`          | `{ key, shouldTransform(hv, dpu), createGenerator(hv, dpu), singleDie? }`    |
 
 Decls deduplicate to a single modifier, but the group key depends on the kind:
 
@@ -121,6 +121,14 @@ Decls deduplicate to a single modifier, but the group key depends on the kind:
   `ownerSide` so `uses` are billed on the owning side even when the affected
   dice belong to the opponent (e.g. Heart of Ixth, Scramble Frequency).
 - `ADDITIONAL_HIT_POOL`, `ROLL_TRIGGER`, and `CUSTOM_ROLL` dedup by `abilityKey`.
+- A `CUSTOM_ROLL` with `singleDie: true` transforms exactly ONE die instead of
+  every matching entry: the kernel picks the highest-hit-value source passing
+  `shouldTransform` (optimal for transforms whose benefit grows with the hit
+  value — Meld) and replaces its entry PMF with `createGenerator(hv, 1)` for
+  one die convolved with the natural binomial over the remaining dice. Bill
+  its `uses` by flagging the declaring invoke `declaration: true` — the decl's
+  `wasDeclaration` routes it through `markDeclarationUses` (one use per dice
+  roll where the declaring side fires).
 - `CONDITIONAL_MODIFIER` reads `limit` from the running ability's `uses`
   snapshot (defaults to 1).
 - `ROLL_TRIGGER` unions the `unitType` filters from all decls under

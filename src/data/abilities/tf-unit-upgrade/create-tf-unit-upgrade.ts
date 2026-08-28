@@ -27,6 +27,10 @@ export interface TfUnitUpgradeConfig {
   combat?: DiceGroup
   move?: number
   capacity?: number | null
+  // Fighter-II-style cards: the unit keeps its CAPACITY_COST (fills ship
+  // capacity first) and the excess counts against the fleet pool at this
+  // cost (0.5 for Hybrid Crystal Fighter's two-per-ship clause).
+  fleetPoolCost?: number
   // Unit abilities — the factory attaches the matching ability objects.
   sustain?: boolean
   bombardment?: DiceGroup
@@ -84,6 +88,7 @@ function buildStats(cfg: TfUnitUpgradeConfig): Partial<UnitStats> {
   if (cfg.combat) stats.COMBAT = cfg.combat
   if (cfg.move != null) stats.MOVE = cfg.move
   if (cfg.capacity !== undefined) stats.CAPACITY = cfg.capacity
+  if (cfg.fleetPoolCost != null) stats.FLEET_POOL_COST = cfg.fleetPoolCost
 
   return stats
 }

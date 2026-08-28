@@ -90,4 +90,56 @@ describe('TF genomes', () => {
     expect(byRemaining[0]).toBeCloseTo(0.4)
     expect(byRemaining[1]).toBeCloseTo(0.6)
   })
+
+  it('Valiant Genome is not exhausted for an unchecked own loss', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { FIGHTER: 1 },
+        abilities: {
+          TF_VALIANT_GENOME: {
+            isEnabled: true,
+            spaceTriggers: [['FIGHTER', false]],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 1, defender: 0 })
+
+    expect(t.attacker.units.FIGHTER).toBeUndefined()
+    expect(t.abilityLog('TF_VALIANT_GENOME')).toHaveLength(0)
+    expect(t.defender.units.CRUISER).toHaveLength(1)
+  })
+
+  it('Valiant Genome holds back when the opponent would give up an unchecked unit', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CRUISER: 1 },
+        abilities: {
+          TF_VALIANT_GENOME: {
+            isEnabled: true,
+            // The opponent would chuck a fighter — not worth the exhaust.
+            spaceTargets: [
+              ['FIGHTER', false],
+              ['CRUISER', true],
+            ],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { FIGHTER: 1, CRUISER: 1 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 1, defender: 0 })
+
+    expect(t.attacker.units.CRUISER).toBeUndefined()
+    expect(t.abilityLog('TF_VALIANT_GENOME')).toHaveLength(0)
+    expect(t.defender.units.FIGHTER).toHaveLength(1)
+  })
 })

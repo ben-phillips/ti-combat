@@ -12,7 +12,10 @@ describe.forEachSide('TF_TEMPORAL_COMMAND_SUITE', () => {
         abilities: {
           // Altruistic Genome (Tellurian): exhaust to cancel a hit
           TELLURIAN: true,
-          TF_TEMPORAL_COMMAND_SUITE: { uses: 1, genomeKey: 'TELLURIAN' },
+          TF_TEMPORAL_COMMAND_SUITE: {
+            isEnabled: true,
+            genomes: [['TELLURIAN', 1]],
+          },
         },
       },
       defender: { faction: 'AVARICE_REX', units: { CRUISER: 2 } },
@@ -25,6 +28,109 @@ describe.forEachSide('TF_TEMPORAL_COMMAND_SUITE', () => {
     // Round 2: the re-readied genome cancels again
     t.advanceRound({ attacker: 1 })
     expect(t.attacker.units.CRUISER).toHaveLength(3)
+  })
+
+  it('the same genome can be re-readied several times', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CRUISER: 4 },
+        abilities: {
+          TELLURIAN: true,
+          // 2 tokens on one genome: base 1 use + 2 → cancels three rounds
+          TF_TEMPORAL_COMMAND_SUITE: {
+            isEnabled: true,
+            genomes: [['TELLURIAN', 2]],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 2 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 1 })
+    t.advanceRound({ attacker: 1 })
+    t.advanceRound({ attacker: 1 })
+    expect(t.attacker.units.CRUISER).toHaveLength(4)
+  })
+
+  it('each genome receives its own token count', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CRUISER: 3, DREADNOUGHT: 1 },
+        abilities: {
+          TELLURIAN: true,
+          // Aristocratic Genome (Viscount Unlenn): +1 die for one ship
+          VISCOUNT_UNLENN: { isEnabled: true, unitType: 'DREADNOUGHT' },
+          TF_TEMPORAL_COMMAND_SUITE: {
+            isEnabled: true,
+            genomes: [
+              ['TELLURIAN', 1],
+              ['VISCOUNT_UNLENN', 2],
+            ],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 2 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    // Granted at PREPARE: base 1 use each → 2 and 3.
+    expect(t.state.attacker.abilities.TELLURIAN.uses).toBe(2)
+    expect(t.state.attacker.abilities.VISCOUNT_UNLENN.uses).toBe(3)
+  })
+
+  it('a re-readied genome still fires at most once per window', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CRUISER: 3 },
+        abilities: {
+          TELLURIAN: true,
+          TF_TEMPORAL_COMMAND_SUITE: {
+            isEnabled: true,
+            genomes: [['TELLURIAN', 1]],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 2 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    // Round 1, 2 hits in one assign-hits window: the genome exhausts on the
+    // first (one cancel per window — the re-ready happens after the
+    // exhaust, not inside it), the second lands and kills a cruiser.
+    t.advanceRound({ attacker: 2 })
+    expect(t.attacker.units.CRUISER).toHaveLength(2)
+
+    // Round 2: the re-readied genome cancels again.
+    t.advanceRound({ attacker: 1 })
+    expect(t.attacker.units.CRUISER).toHaveLength(2)
+  })
+
+  it('genomes with a zero count receive nothing', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'AVARICE_REX',
+        units: { CRUISER: 3 },
+        abilities: {
+          TELLURIAN: true,
+          TF_TEMPORAL_COMMAND_SUITE: {
+            isEnabled: true,
+            genomes: [['TELLURIAN', 0]],
+          },
+        },
+      },
+      defender: { faction: 'AVARICE_REX', units: { CRUISER: 2 } },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+    expect(t.state.attacker.abilities.TELLURIAN.uses).toBe(1)
   })
 
   it('without the suite the genome exhausts after one use', () => {

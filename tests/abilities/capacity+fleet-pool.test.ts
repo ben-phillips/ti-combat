@@ -68,6 +68,41 @@ describe.forEachSide('CAPACITY + FLEET_POOL', () => {
     expect(t.attacker.units.FIGHTER).toHaveLength(4)
   })
 
+  it('fighter overflow spills to the fleet pool instead of evicting infantry', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'NAALU_COLLECTIVE',
+        // Carrier(cap 4) + 2 infantry + 4 Fighter IIs: the infantry claim
+        // their capacity first, 2 fighters ride along, 2 are in excess →
+        // 2 × 0.5 = 1 fleet pool. Pool: carrier 1 + 1 = 2 ≤ 3 → nothing
+        // is removed. (Counting the fighters against capacity would have
+        // evicted the infantry for an overflow the fleet pool already
+        // prices in.)
+        units: { CARRIER: 1, INFANTRY: 2, FIGHTER: 4 },
+        upgrades: ['FIGHTER'],
+        abilities: {
+          CAPACITY: true,
+          FLEET_POOL: {
+            isEnabled: true,
+            fleetPool: 3,
+            shipPriority: [['CARRIER'], ['FIGHTER']],
+          },
+        },
+      },
+      defender: {
+        faction: 'ARBOREC',
+        units: { CRUISER: 1 },
+      },
+    })
+
+    t.advanceTo('SPACE_COMBAT')
+
+    expect(t.attacker.units.CARRIER).toHaveLength(1)
+    expect(t.attacker.units.INFANTRY).toHaveLength(2)
+    expect(t.attacker.units.FIGHTER).toHaveLength(4)
+  })
+
   it('does not check capacity during combat rounds', () => {
     const t = combatTest({
       mode: 'SPACE',

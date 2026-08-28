@@ -254,13 +254,14 @@ function initialBranches(
   sources: FlatSource[],
   customRolls: CustomRollTargetSpec[],
 ): SideBranch[] {
+  const singleDiePicks = resolveSingleDiePicks(sources, customRolls)
   let branches: SideBranch[] = [
     { probability: 1, hits: {}, usesDelta: new Map(), pendingEffects: [] },
   ]
   for (const s of sources) {
     const totalDice = s.unitCount * s.dicePerUnit
     if (totalDice <= 0) continue
-    const pmf = entryPmf(s, customRolls)
+    const pmf = entryPmf(s, customRolls, singleDiePicks)
     const next: SideBranch[] = []
     for (const b of branches) {
       for (let k = 0; k < pmf.length; k++) {
@@ -279,16 +280,47 @@ function initialBranches(
   return branches
 }
 
+/** For each `singleDie` spec, pick the ONE source it transforms: the
+ *  highest-hit-value source (rolled dice only) passing `shouldTransform` —
+ *  optimal for transforms whose benefit grows with the hit value. Ties keep
+ *  the first source in collection order (deterministic). */
+function resolveSingleDiePicks(
+  sources: FlatSource[],
+  customRolls: CustomRollTargetSpec[],
+): Map<CustomRollTargetSpec, Source> {
+  const picks = new Map<CustomRollTargetSpec, Source>()
+  for (const spec of customRolls) {
+    if (spec.singleDie !== true) continue
+    let best: FlatSource | undefined
+    for (const s of sources) {
+      if (s.unitCount * s.dicePerUnit <= 0) continue
+      if (!spec.shouldTransform(s.hitValue, s.dicePerUnit)) continue
+      if (best === undefined || s.hitValue > best.hitValue) best = s
+    }
+    if (best) picks.set(spec, best.source)
+  }
+  return picks
+}
+
 /** Resolve the entry's hit PMF. If a CUSTOM_ROLL spec matches (deterministic
  *  scan in declaration order — first match wins), produce the per-unit PMF
- *  via its generator and convolve `unitCount` copies. Otherwise fall back to
- *  the natural binomial over the entry's total dice. */
+ *  via its generator and convolve `unitCount` copies. A `singleDie` spec
+ *  matches only its picked source and transforms one die of it: its PMF is
+ *  `createGenerator(hv, 1)` convolved with the natural binomial over the
+ *  entry's remaining dice. Otherwise fall back to the natural binomial over
+ *  the entry's total dice. */
 function entryPmf(
   s: FlatSource,
   customRolls: CustomRollTargetSpec[],
+  singleDiePicks: Map<CustomRollTargetSpec, Source>,
 ): number[] {
   const totalDice = s.unitCount * s.dicePerUnit
   for (const spec of customRolls) {
+    if (spec.singleDie === true) {
+      if (singleDiePicks.get(spec) !== s.source) continue
+      const oneDie = spec.createGenerator(s.hitValue, 1)
+      return convolvePmf(oneDie, binomial(totalDice - 1, hitProb(s.hitValue)))
+    }
     if (!spec.shouldTransform(s.hitValue, s.dicePerUnit)) continue
     const perUnit = spec.createGenerator(s.hitValue, s.dicePerUnit)
     return convolveN(perUnit, s.unitCount)

@@ -390,5 +390,21 @@ export function getAvailableAbilities(
         )
       : []
 
-  return [...base, ...factionAbilities, ...tfShared, ...unitAbilities]
+  // TF unit-upgrade cards are the TF analog of TI4's build-time UPGRADED
+  // stats: their PREPARE applies the stat block that the ADVANCED phase
+  // drivers (Capacity, Fleet Pool) read during their own PREPARE
+  // enforcement. Register them ahead of everything else so the stats settle
+  // first — registration order drives invoke resolution order within a
+  // timing pass, while panel display is unaffected (slots are grouped via
+  // SLOT_DISPLAY, not list order).
+  const tfUpgrades = tfShared.filter(r => r.slot === 'TF_UNIT_UPGRADE')
+  const tfRest = tfShared.filter(r => r.slot !== 'TF_UNIT_UPGRADE')
+
+  return [
+    ...tfUpgrades,
+    ...base,
+    ...factionAbilities,
+    ...tfRest,
+    ...unitAbilities,
+  ]
 }

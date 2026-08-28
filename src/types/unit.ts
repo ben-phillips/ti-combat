@@ -30,6 +30,11 @@ export interface UnitStats {
   MOVE?: number | null
   CAPACITY?: number | null
   CAPACITY_COST?: number | null
+  /** Carried unit types that ride free of capacity while a unit with this
+   *  stat is alive on the side (A Strangled Whisper: infantry and fighters
+   *  don't count against capacity, but mechs still do). Checked against
+   *  living units, so the exemption ends when the carrier dies. */
+  FREE_CARGO?: readonly UnitBaseType[]
   FLEET_POOL_COST?: number
   DIRECT_HIT_IMMUNE?: boolean
   UNIT_ABILITIES?: UnitAbilities

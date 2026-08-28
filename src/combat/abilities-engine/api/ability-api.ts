@@ -154,6 +154,13 @@ export class SideApi {
     return this.state[this._side].faction
   }
 
+  /** The simulation's combat mode. Exposed for hooks that receive only a
+   *  `SideApi` (e.g. `Ability.preventDestroy`) but need to pick between
+   *  space- and ground-scoped params. */
+  getCombatMode(): CombatMode {
+    return this.state.combatMode
+  }
+
   getUnits(unitType: UnitType, options: GetUnitsOptions) {
     return CombatSideState.getUnits(this._sideData, unitType, options)
   }
@@ -574,6 +581,28 @@ export class SideApi {
     )
   }
 
+  /** `unitType` ignores every `lost` / `cannotBeUsed` restriction coming
+   *  from `reason` — blanket ones included. Resolved lazily, so it may be
+   *  declared before or after the restriction itself (see the Il Na Viroset
+   *  flagship ignoring an Entropic Scar). */
+  setUnitAbilityRestrictionImmunity(reason: string, unitType: UnitBaseType) {
+    CombatSideState.addRestrictionImmunity(
+      this.state,
+      this._side,
+      reason,
+      unitType,
+    )
+  }
+
+  removeUnitAbilityRestrictionImmunity(reason: string, unitType: UnitBaseType) {
+    CombatSideState.removeRestrictionImmunity(
+      this.state,
+      this._side,
+      reason,
+      unitType,
+    )
+  }
+
   addSubtype(unitId: UnitId, subtype: UnitVariantId): UnitType | undefined {
     const newKey = CombatSideState.addSubtype(this._sideData, unitId, subtype)
     if (!newKey) return undefined
@@ -806,9 +835,15 @@ export class SideApi {
   }
 
   /** Declare "+`count` dice to one unit in the variant with the best
-   *  (default / `'BEST'`) or worst (`'WORST'`) hit value." Consumed at
-   *  roll time. Only valid during BEFORE_DICE_ROLL / BEFORE_UNIT_ABILITY_ROLL. */
-  addDiceCount(count: number, target: 'BEST' | 'WORST' = 'BEST'): void {
+   *  (default / `'BEST'`) or worst (`'WORST'`) hit value." Pass `unitTypes`
+   *  to restrict the candidates to those base types (an empty list is a
+   *  no-op). Consumed at roll time. Only valid during BEFORE_DICE_ROLL /
+   *  BEFORE_UNIT_ABILITY_ROLL. */
+  addDiceCount(
+    count: number,
+    target: 'BEST' | 'WORST' = 'BEST',
+    unitTypes?: readonly UnitBaseType[],
+  ): void {
     pushModifier(this._ctx, this._side, list => ({
       type: 'ADD_DICE_COUNT',
       slotId: list.length,
@@ -816,6 +851,7 @@ export class SideApi {
       abilityKey: this._ctx.ability!.key,
       count,
       target,
+      unitTypes,
     }))
   }
 

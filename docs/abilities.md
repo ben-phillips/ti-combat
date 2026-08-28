@@ -267,6 +267,7 @@ Used in both `isCallable` and `call` contexts. The same `SideApi` class is used 
 
 ```typescript
 getFaction(): FactionKey
+getCombatMode(): CombatMode  // for hooks that receive only a SideApi (e.g. preventDestroy)
 getUnits(unitType: UnitType, options: GetUnitsOptions): UnitId[]
 hasUnit(unitId: UnitId): boolean
 hasUnitType(unitType: UnitType, options: GetUnitsOptions): boolean
@@ -325,11 +326,17 @@ setUnitAbilityLost(ability: UnitAbility, reason: string, target?: UnitBaseType |
 removeUnitAbilityLost(ability: UnitAbility, reason: string, target?: UnitBaseType | UnitCategory): void
 setUnitAbilityCannotBeUsed(ability: UnitAbility, reason: string, target?: UnitBaseType | UnitCategory): void
 removeUnitAbilityCannotBeUsed(ability: UnitAbility, reason: string, target?: UnitBaseType | UnitCategory): void
+
+// Carve one unit type back OUT of every restriction (both layers) coming from `reason`
+setUnitAbilityRestrictionImmunity(reason: string, unitType: UnitBaseType): void
+removeUnitAbilityRestrictionImmunity(reason: string, unitType: UnitBaseType): void
 ```
 
 `reason` is the ability key that caused the restriction. Used to cleanly remove restrictions without affecting other abilities' restrictions.
 
 `target` can be a specific `UnitBaseType` (e.g., `'MECH'`) or a `UnitCategory` (`'SHIPS'`, `'NON_FIGHTER_SHIPS'`, `'GROUND_FORCES'`, `'STRUCTURES'`). Categories are resolved at check time, so changes to category membership are automatically reflected.
+
+**Immunity** is the inverse of a restriction: `setUnitAbilityRestrictionImmunity('ENTROPIC_SCAR', 'FLAGSHIP')` makes flagships ignore every restriction that scar added, blanket ones included. It resolves lazily alongside the restrictions themselves, so it can be declared before or after the restricting ability's PREPARE (see the Il Na Viroset flagship, `il_na_viroset/enigma.ts`).
 
 **lost vs cannotBeUsed**: "lost" means the ability is gone (e.g., Publicize Weapon Schematics removes War Sun sustain). "cannotBeUsed" means it's still there but blocked (e.g., Fourth Moon prevents sustain from firing). Both are checked by Sustain Damage before firing.
 
@@ -357,9 +364,9 @@ updateAbilityConfig(key: string, updates: Record<string, unknown>): void
 There is no separate "DiceApi" object. Dice are modified during `BEFORE_DICE_ROLL` / `BEFORE_UNIT_ABILITY_ROLL` by calling these methods directly on `ctx.api.own` / `ctx.api.opponent`. Each call queues a modifier that the dice-math kernel applies (see `docs/dice-math.md`).
 
 ```typescript
-addDiceCount(count: number, target: 'BEST' | 'WORST' = 'BEST'): void  // Add dice to best/worst (lowest/highest hit value) source
-setDiceCount(count: number, unitType: UnitType): void                 // Set per-unit dice count for a unit type
-addDiceGroup(diceGroup: DiceGroup): void                              // Add a new dice group keyed under the current ability
+addDiceCount(count, target?: 'BEST' | 'WORST', unitTypes?): void  // Add dice to best/worst (lowest/highest hit value) source, optionally restricted to `unitTypes` (base types; empty list = no-op). The dice land ON the chosen unit's entry, so per-unit effects (Crown of Thalnos' safe reroll) see them
+setDiceCount(count: number, unitType: UnitType): void             // Set per-unit dice count for a unit type
+addDiceGroup(diceGroup: DiceGroup): void                          // Add a new dice group keyed under the current ability
 ```
 
 `DiceGroup` is `[hitValue, baseDice]` or `[hitValue, baseDice, bonusDice]` (`src/types/die.ts`). Hit value is the threshold — a die must roll ≥ hitValue to hit. Total dice per unit = `baseDice + bonusDice`.

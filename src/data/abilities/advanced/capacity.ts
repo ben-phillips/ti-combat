@@ -1,6 +1,11 @@
 import { z } from 'zod/mini'
 
-import { type Ability, type AbilityCallContext, parseVariantId } from '@/combat'
+import {
+  type Ability,
+  type AbilityCallContext,
+  parseVariantId,
+  type SideApi,
+} from '@/combat'
 import { UNIT_TYPES } from '@/constants/units'
 import type { UnitBaseType, UnitList, UnitType } from '@/types'
 import { UnitListSchema } from '@/types'
@@ -72,11 +77,30 @@ export function computeTotalCapacity(ctx: AbilityCallContext): number {
     const stats = api.getUnitStats(baseType)
     if (!stats || stats.CAPACITY_COST != null) continue
     const cap = stats.CAPACITY
-    if (cap != null && cap > 0) {
-      totalCapacity += cap * api.countUnits(baseType, { includeVariants: true })
-    }
+    if (cap == null || cap <= 0) continue
+    // Skip zero-count types BEFORE multiplying: an infinite-capacity stat
+    // (A Strangled Whisper) times a count of 0 would poison the total with
+    // NaN once the carrier is destroyed.
+    const count = api.countUnits(baseType, { includeVariants: true })
+    if (count > 0) totalCapacity += cap * count
   }
   return totalCapacity
+}
+
+/** Carried unit types exempt from capacity because a LIVING unit on the side
+ *  carries them free (`UnitStats.FREE_CARGO` — A Strangled Whisper's
+ *  infantry/fighters). Recomputed per enforcement pass, so the exemption
+ *  ends the moment the carrier dies. Shared with the fleet-pool driver:
+ *  free cargo neither consumes capacity nor spills into the fleet pool. */
+export function collectFreeCargo(api: SideApi): ReadonlySet<UnitBaseType> {
+  const free = new Set<UnitBaseType>()
+  for (const baseType of UNIT_TYPES) {
+    const cargo = api.getUnitStats(baseType)?.FREE_CARGO
+    if (!cargo?.length) continue
+    if (api.countUnits(baseType, { includeVariants: true }) === 0) continue
+    for (const t of cargo) free.add(t)
+  }
+  return free
 }
 
 function enforceCapacity(
@@ -86,32 +110,36 @@ function enforceCapacity(
   const api = ctx.api.own
 
   const totalCapacity = computeTotalCapacity(ctx)
+  const freeCargo = collectFreeCargo(api)
 
-  // Collect carried units (CAPACITY_COST != null)
+  // Collect carried units (CAPACITY_COST != null). Exempt from enforcement:
+  // free cargo (a living carrier holds them free), and units with a fleet
+  // pool fallback (Fighter II style) — their excess beyond capacity spills
+  // into the fleet pool instead of forcing removals, and counting them here
+  // would wrongly evict OTHER cargo (infantry) for an overflow that the
+  // fleet-pool driver already prices in.
   const carriedTypes: {
     baseType: UnitBaseType
     cost: number
-    hasFleetPool: boolean
   }[] = []
   for (const baseType of UNIT_TYPES) {
+    if (freeCargo.has(baseType)) continue
     const stats = api.getUnitStats(baseType)
     if (!stats || stats.CAPACITY_COST == null) continue
+    if (typeof stats.FLEET_POOL_COST === 'number') continue
     const count = api.countUnits(baseType, { includeVariants: true })
     if (count === 0) continue
     carriedTypes.push({
       baseType,
       cost: stats.CAPACITY_COST,
-      hasFleetPool: typeof stats.FLEET_POOL_COST === 'number',
     })
   }
 
   if (carriedTypes.length === 0) return
 
-  // If no capacity at all, remove carried units without fleet pool fallback,
-  // leave those with FLEET_POOL_COST for fleet pool to handle
+  // If no capacity at all, remove all (non-exempt) carried units
   if (totalCapacity === 0) {
-    for (const { baseType, hasFleetPool } of carriedTypes) {
-      if (hasFleetPool) continue
+    for (const { baseType } of carriedTypes) {
       const units = api.getUnits(baseType, { includeVariants: true })
       for (const unitId of units) {
         api.removeUnits(unitId)
@@ -128,7 +156,8 @@ function enforceCapacity(
 
   if (totalCost <= totalCapacity) return
 
-  // Remove excess units by priority, but skip those with fleet pool fallback
+  // Remove excess units by priority (exempt types are absent from
+  // carriedTypes and skipped)
   let excess = totalCost - totalCapacity
 
   for (const priorityType of removePriority) {
@@ -138,7 +167,7 @@ function enforceCapacity(
     const info = carriedTypes.find(
       c => c.baseType === baseType || c.baseType === priorityType,
     )
-    if (!info || info.hasFleetPool) continue
+    if (!info) continue
     const stats = api.getUnitStats(baseType)
     if (!stats || stats.CAPACITY_COST == null) continue
 

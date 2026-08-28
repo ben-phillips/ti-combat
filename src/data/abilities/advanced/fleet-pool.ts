@@ -1,5 +1,6 @@
 import { type Ability, abilityUtils, type SideApi } from '@/combat'
 import { declareParam } from '@/combat/abilities-engine/declare-param'
+import { collectFreeCargo } from '@/data/abilities/advanced/capacity'
 import type { UnitBaseType, UnitList } from '@/types'
 
 type Params = {
@@ -64,51 +65,47 @@ export function enforceFleetPool(api: SideApi): void {
 
   const { fleetPool, shipPriority } = config
 
-  const capacityConfig = api.getAbilityConfig('CAPACITY')
-  const capacityEnabled = !!capacityConfig?.isEnabled
+  // Types riding free on a living carrier (A Strangled Whisper) neither
+  // consume capacity nor spill into the fleet pool.
+  const freeCargo = collectFreeCargo(api)
 
-  // Compute total capacity if capacity is enabled
-  let totalCapacity = Infinity
-  if (capacityEnabled) {
-    totalCapacity = 0
-    const settings = api.getAbilityConfig('SETTINGS')
-    const allTypes = [
-      ...settings.ships,
-      ...settings.groundForces,
-      ...settings.structures,
-    ]
-    for (const baseType of allTypes) {
-      const stats = api.getUnitStats(baseType)
-      if (!stats || stats.CAPACITY_COST != null) continue
-      const cap = stats.CAPACITY
-      if (cap != null && cap > 0) {
-        totalCapacity +=
-          cap * api.countUnits(baseType, { includeVariants: true })
-      }
-    }
+  // "Fighters in excess of your ships' capacity count against your fleet
+  // pool" — the excess is measured against the ships' printed capacity from
+  // the stats, independent of whether the CAPACITY enforcement toggle is on
+  // (the toggle controls removal of illegal cargo, not how much capacity
+  // the ships actually have).
+  const settings = api.getAbilityConfig('SETTINGS')
+  const allTypes = [
+    ...settings.ships,
+    ...settings.groundForces,
+    ...settings.structures,
+  ]
+
+  let totalCapacity = 0
+  for (const baseType of allTypes) {
+    const stats = api.getUnitStats(baseType)
+    if (!stats || stats.CAPACITY_COST != null) continue
+    const cap = stats.CAPACITY
+    if (cap == null || cap <= 0) continue
+    const count = api.countUnits(baseType, { includeVariants: true })
+    if (count > 0) totalCapacity += cap * count
   }
 
-  // Compute capacity used by units WITHOUT fleet pool fallback
+  // Capacity used by units WITHOUT fleet pool fallback — they claim their
+  // share first (player-optimal: carried units that CAN spill into the
+  // fleet pool yield the capacity to the ones that can't).
   let capacityUsedByNonFP = 0
-  if (totalCapacity !== Infinity) {
-    const settings = api.getAbilityConfig('SETTINGS')
-    const allTypes = [
-      ...settings.ships,
-      ...settings.groundForces,
-      ...settings.structures,
-    ]
-    for (const baseType of allTypes) {
-      const stats = api.getUnitStats(baseType)
-      if (
-        !stats ||
-        stats.CAPACITY_COST == null ||
-        typeof stats.FLEET_POOL_COST === 'number'
-      )
-        continue
-      capacityUsedByNonFP +=
-        stats.CAPACITY_COST *
-        api.countUnits(baseType, { includeVariants: true })
-    }
+  for (const baseType of allTypes) {
+    if (freeCargo.has(baseType)) continue
+    const stats = api.getUnitStats(baseType)
+    if (
+      !stats ||
+      stats.CAPACITY_COST == null ||
+      typeof stats.FLEET_POOL_COST === 'number'
+    )
+      continue
+    capacityUsedByNonFP +=
+      stats.CAPACITY_COST * api.countUnits(baseType, { includeVariants: true })
   }
 
   const remainingCapacity = Math.max(0, totalCapacity - capacityUsedByNonFP)
@@ -124,8 +121,8 @@ export function enforceFleetPool(api: SideApi): void {
 
     if (stats.CAPACITY_COST != null) {
       // Unit has both costs — only excess beyond capacity counts
-      // Capacity disabled = infinite → no excess → skip
-      if (!capacityEnabled) continue
+      // Riding free on a living carrier → never in excess of capacity
+      if (freeCargo.has(baseType)) continue
       const carriedCost = stats.CAPACITY_COST * count
       const excessCost = Math.max(0, carriedCost - remainingCapacity)
       const excessCount = Math.ceil(excessCost / stats.CAPACITY_COST)
