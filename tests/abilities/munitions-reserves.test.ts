@@ -24,6 +24,57 @@ describe('MUNITIONS_RESERVES', () => {
     expect(t.abilityLog('MUNITIONS_RESERVES')).not.toHaveLength(0)
   })
 
+  it('spends exactly one use per round (uses: 1 fires in 1 round)', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'BARONY_OF_LETNEV',
+        units: { CRUISER: 1 },
+        abilities: {
+          MUNITIONS_RESERVES: {
+            isEnabled: true,
+            uses: 1,
+            ownStrategyKind: 'ALWAYS',
+          },
+        },
+      },
+      defender: { faction: 'ARBOREC', units: { CARRIER: 5 } },
+    })
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 0, defender: 0 })
+    t.advanceRound({ attacker: 0, defender: 0 })
+    const rerollEntries = t
+      .abilityLog('MUNITIONS_RESERVES')
+      .filter(e => e.path.includes('REROLL_DICE_ROLL'))
+    expect(rerollEntries).toHaveLength(1)
+  })
+
+  it('spends exactly one use per round (uses: 2 fires in 2 rounds)', () => {
+    const t = combatTest({
+      mode: 'SPACE',
+      attacker: {
+        faction: 'BARONY_OF_LETNEV',
+        units: { CRUISER: 1 },
+        abilities: {
+          MUNITIONS_RESERVES: {
+            isEnabled: true,
+            uses: 2,
+            ownStrategyKind: 'ALWAYS',
+          },
+        },
+      },
+      defender: { faction: 'ARBOREC', units: { CARRIER: 5 } },
+    })
+    t.advanceTo('SPACE_COMBAT')
+    t.advanceRound({ attacker: 0, defender: 0 })
+    t.advanceRound({ attacker: 0, defender: 0 })
+    t.advanceRound({ attacker: 0, defender: 0 })
+    const rerollEntries = t
+      .abilityLog('MUNITIONS_RESERVES')
+      .filter(e => e.path.includes('REROLL_DICE_ROLL'))
+    expect(rerollEntries).toHaveLength(2)
+  })
+
   it('does not fire when disabled', () => {
     const t = combatTest({
       mode: 'SPACE',

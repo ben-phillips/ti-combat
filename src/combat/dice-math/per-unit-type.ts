@@ -100,7 +100,11 @@ export function runPerUnitTypeMode(input: PerUnitTypeInput): DiceMathBranch[] {
           // SCRAMBLE_FREQUENCY) each side's fire bills its own owner.
           // `consumed` is 1 except for per-unit rerolls (units rerolled;
           // 0 in outcomes where no unit qualified — nothing billed).
-          if (consumed === 0) {
+          // Specs with `consumeUseIf` defer billing to `markOneShotUses`,
+          // which evaluates the predicate with the side context; billing
+          // here too would double-spend (Munitions Reserves already paid
+          // at START_OF_COMBAT_ROUND).
+          if (consumed === 0 || spec.consumeUseIf !== undefined) {
             return {
               probability,
               hits,

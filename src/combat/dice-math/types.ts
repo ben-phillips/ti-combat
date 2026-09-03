@@ -311,6 +311,11 @@ export interface RerollTargetSpec {
   limit?: number
   /** Optional gate consulted with the side's pre-reroll aggregate. */
   rerollIf?: (side: RerollSide) => boolean
+  /** Use-billing override — see `RerollDecl.consumeUseIf`. When set, the
+   *  per-branch reroll factory must NOT bill; `markOneShotUses` evaluates
+   *  the predicate instead (e.g. Munitions Reserves pays at
+   *  START_OF_COMBAT_ROUND, so its reroll never bills). */
+  consumeUseIf?: (side: RerollSide) => boolean
 }
 
 export interface ConditionalModifierTargetSpec {

@@ -57,6 +57,7 @@ export function collectModifiers(input: CollectModifiersInput): Modifier[] {
         ? (declaredUses as number)
         : Infinity,
       rerollIf: d.rerollIf,
+      consumeUseIf: d.consumeUseIf,
     }
     const idx: 0 | 1 = d.side === firing ? 0 : 1
     const groupKey = `${d.ownerSide}|${d.abilityKey}`

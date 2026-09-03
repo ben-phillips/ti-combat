@@ -50,6 +50,16 @@ a check there too.
   `isCallable: params => params.isEnabled && params.uses > 0` explicitly
   (see Bone Picked Clean, Munitions Reserves).
 
+- **REROLL decls are billed in TWO places — `consumeUseIf` must be honored
+  by both.** The per-unit-type reroll factory (`runPerUnitTypeMode` →
+  `applyRerollSpecs`) sets `usesDelta` on every fired branch, and
+  `markOneShotUses` then skips any key already present. A `RerollDecl`
+  with `consumeUseIf` (Munitions Reserves, which pays at
+  START_OF_COMBAT_ROUND via the normal dispatch decrement) must therefore
+  carry `consumeUseIf` onto `RerollTargetSpec` so the factory defers
+  billing; otherwise the reroll bills a second use per round (symptom:
+  `uses: 1` and `uses: 2` both fire for one round, `uses` goes negative).
+
 - **One external invoke poisons the rest on non-owner sides.** An ability
   with ANY `external: true` invoke dispatches ONLY its external invokes on a
   side that doesn't own it (`passesCrossFactionFilter`). A wrapper ability
