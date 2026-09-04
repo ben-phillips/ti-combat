@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import { CombatEngine } from '@/combat'
+import { buildCombatState } from '@/hooks/combat-setup/build-combat-state'
+
 import { combatTest } from '../utils/combat-test'
 
 describe('MAGEN_DEFENSE_GRID + VALKYRIE_PARTICLE_WEAVE', () => {
@@ -26,5 +29,28 @@ describe('MAGEN_DEFENSE_GRID + VALKYRIE_PARTICLE_WEAVE', () => {
     expect(t.abilityLog('MAGEN_DEFENSE_GRID')).not.toHaveLength(0)
     // VPW should NOT fire — VPW checks dice roll hits, not MDG hits
     expect(t.abilityLog('VALKYRIE_PARTICLE_WEAVE')).toHaveLength(0)
+  })
+
+  it('MDG wins with 100% probability when it destroys the last unit before VPW can fire', () => {
+    const state = buildCombatState({
+      mode: 'GROUND',
+      attacker: {
+        faction: 'SARDAKK_NORR',
+        units: { INFANTRY: 1 },
+        abilities: { VALKYRIE_PARTICLE_WEAVE: true },
+      },
+      defender: {
+        faction: 'ARBOREC',
+        units: { INFANTRY: 1, SPACE_DOCK: 1 },
+        abilities: { MAGEN_DEFENSE_GRID: true },
+      },
+    })
+
+    const outcomes = new CombatEngine().simulate(state)
+    const defenderWinProbability = outcomes
+      .filter(outcome => outcome.winner === 'defender')
+      .reduce((total, outcome) => total + outcome.probability, 0)
+
+    expect(defenderWinProbability).toBe(1)
   })
 })

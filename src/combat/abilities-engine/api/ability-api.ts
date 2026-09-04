@@ -378,7 +378,8 @@ export class SideApi {
     }
 
     CombatSideState.removeUnits(s, destroyed)
-    this._abilitiesParams?.combatState.syncWinnerSide()
+    const combatState = this._abilitiesParams?.combatState
+    combatState?.queueCompletionCheck(this._ctx.phaseStack ?? [])
 
     if (this._abilitiesParams) {
       this._ctx.runDestroyAbilities(destroyed)
@@ -416,6 +417,8 @@ export class SideApi {
 
   removeUnits(target: UnitBaseType | UnitId | UnitId[]): void {
     CombatSideState.removeUnits(this._sideData, target)
+    const combatState = this._abilitiesParams?.combatState
+    combatState?.queueCompletionCheck(this._ctx.phaseStack ?? [])
   }
 
   placeUnits(

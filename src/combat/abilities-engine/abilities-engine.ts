@@ -1167,7 +1167,7 @@ export class AbilitiesEngine {
         // passes (step === undefined) can't park: pushed steps sit on
         // `pendingSteps` and run on the next `advance()`.
         const parked =
-          step !== undefined && this._combatState.currentStep !== step
+          step !== undefined && this._combatState.peekStep() !== step
 
         if (!parked && step) step.frame = undefined
         if (parked) return 'parked'

@@ -25,6 +25,36 @@ describe('MAGEN_DEFENSE_GRID', () => {
     expect(t.attacker.units.INFANTRY).toHaveLength(2)
   })
 
+  it("ends combat before dice roll when its hit destroys the attacker's last unit", () => {
+    const t = combatTest({
+      mode: 'GROUND',
+      attacker: {
+        faction: 'ARBOREC',
+        units: { INFANTRY: 1 },
+      },
+      defender: {
+        faction: 'ARBOREC',
+        units: { PDS: 1, INFANTRY: 1 },
+        abilities: { MAGEN_DEFENSE_GRID: true },
+      },
+    })
+
+    t.advanceTo('GROUND_COMBAT')
+    const dicePoolsBeforeCombat = t.log.filter(
+      entry => entry.path.at(-1) === 'DICE_POOL',
+    ).length
+
+    t.advanceRound()
+
+    expect(t.abilityLog('MAGEN_DEFENSE_GRID')).not.toHaveLength(0)
+    expect(t.attacker.units.INFANTRY).toBeUndefined()
+    expect(t.state.winnerSide).toBe('defender')
+    expect(t.isFinished()).toBe(true)
+    expect(
+      t.log.filter(entry => entry.path.at(-1) === 'DICE_POOL'),
+    ).toHaveLength(dicePoolsBeforeCombat)
+  })
+
   it('produces 1 hit when SPACE_DOCK is present', () => {
     const t = combatTest({
       mode: 'GROUND',

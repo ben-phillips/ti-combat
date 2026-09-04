@@ -139,12 +139,12 @@ describe.forEachSide('DIRECT_HIT', () => {
       mode: 'SPACE',
       attacker: {
         faction: 'ARBOREC',
-        units: { DREADNOUGHT: 1 },
+        units: { DREADNOUGHT: 2 },
         abilities: { DIRECT_HIT: { uses: 1 } },
       },
       defender: {
         faction: 'ARBOREC',
-        units: { DREADNOUGHT: 1 },
+        units: { DREADNOUGHT: 2 },
         abilities: { DIRECT_HIT: { uses: 1 } },
       },
     })
@@ -152,9 +152,11 @@ describe.forEachSide('DIRECT_HIT', () => {
     t.advanceTo('SPACE_COMBAT')
     t.advanceRound({ attacker: 1, defender: 1 })
 
-    // Both dreadnoughts sustained and were destroyed by opponent's Direct Hit
-    expect(t.attacker.units.DREADNOUGHT).toBeUndefined()
-    expect(t.defender.units.DREADNOUGHT).toBeUndefined()
+    // Each side still has a ship after the first Direct Hit, so both resolve.
+    expect(t.attacker.units.DREADNOUGHT).toHaveLength(1)
+    expect(t.defender.units.DREADNOUGHT).toHaveLength(1)
+    expect(t.state.attacker.abilities.DIRECT_HIT.uses).toBe(0)
+    expect(t.state.defender.abilities.DIRECT_HIT.uses).toBe(0)
   })
 
   it('does not trigger when sustaining variant is excluded from targets', () => {

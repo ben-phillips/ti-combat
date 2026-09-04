@@ -362,7 +362,24 @@ export class CombatState {
   }
 
   assignHits(phase: MetaPhase[]): void {
-    this.pushScript(this.getAssignHitsScript(phase))
+    this.pushScript([
+      ...this.getAssignHitsScript(phase),
+      {
+        kind: 'method',
+        fn: CombatState.prototype._postAssignHits,
+        phase,
+      },
+    ])
+  }
+
+  /** Queue a wipe check after a direct unit-removal effect. */
+  queueCompletionCheck(phase: MetaPhase[]): void {
+    if (this.data.winnerSide !== undefined) return
+    this.pendingSteps.push({
+      kind: 'method',
+      fn: CombatState.prototype._postUnitMutation,
+      phase,
+    })
   }
 
   isFinished(): boolean {
@@ -679,6 +696,19 @@ export class CombatState {
     }
 
     if (winner !== undefined) this._triggerCompletion(phase, winner)
+  }
+
+  private _postUnitMutation(phase: MetaPhase[]): void {
+    const destroyGroup = this.pendingSteps.at(-1)
+    if (destroyGroup?.kind === 'group' && Array.isArray(destroyGroup.data)) {
+      destroyGroup.steps.unshift({
+        kind: 'method',
+        fn: CombatState.prototype._postUnitMutation,
+        phase,
+      })
+      return
+    }
+    this._postAssignHits(phase)
   }
 
   private _setComplete(): void {

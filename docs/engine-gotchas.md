@@ -93,6 +93,21 @@ a check there too.
   first — the TAIL dies first.** The unit spared by cancelling one hit is
   `result[0]`, not `result[n-1]` (see Divinity's `savedByHitCancel`).
 
+- **Out-of-band ability hits need their own wipe check.** When `addHits`
+  creates a hit pool outside a dice-roll group, `CombatState.assignHits`
+  queues both assignment and `_postAssignHits`. Keep that completion check
+  after the destruction cascade; otherwise a Magen Defense Grid wipe resumes
+  `START_OF_COMBAT` and rolls combat dice before ending the combat.
+
+- **Direct unit removal must park, drain destruction effects, then check for
+  a wipe.** `removeUnits` and `destroyUnits` queue a completion check before
+  their ability timing resumes; when already inside a destruction cascade,
+  that check belongs at the end of the active group so `AFTER_DESTROY`
+  abilities such as Brother Milor still fire. Parking must compare the actual
+  next step (`peekStep`), not the next timing (`currentStep`), because a queued
+  method-only check otherwise leaves the invoking timing in place and repeats
+  it indefinitely (Fragment Reality + Fleet Pool).
+
 - **A blanket restriction stops being blanket once anything is immune to
   it.** `setUnitAbilityRestrictionImmunity(reason, unitType)` makes a
   target-less restriction resolve into the concrete unit types present
