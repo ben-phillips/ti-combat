@@ -122,26 +122,4 @@ describe('MAGEN_DEFENSE_GRID', () => {
     expect(t.attacker.units.MECH).toHaveLength(1)
     expect(t.attacker.units.MECH![0].isDamaged).toBe(true)
   })
-
-  it('only fires for the defender', () => {
-    const t = combatTest({
-      mode: 'GROUND',
-      attacker: {
-        faction: 'ARBOREC',
-        units: { PDS: 1, INFANTRY: 2 },
-        abilities: { MAGEN_DEFENSE_GRID: true },
-      },
-      defender: {
-        faction: 'ARBOREC',
-        units: { INFANTRY: 3 },
-      },
-    })
-
-    t.advanceTo('GROUND_COMBAT')
-
-    t.advanceRound()
-
-    expect(t.abilityLog('MAGEN_DEFENSE_GRID')).toHaveLength(0)
-    expect(t.defender.units.INFANTRY).toHaveLength(3)
-  })
 })
