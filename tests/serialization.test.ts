@@ -45,6 +45,25 @@ describe('toSerializedConfig', () => {
     expect(config.aa['DIRECT_HIT'].uses).toBe(2)
   })
 
+  it('includes default-enabled step abilities when disabled', () => {
+    const setup = new CombatSetup()
+    setup.setAbilityParam('attacker', 'ANTI_FIGHTER_BARRAGE', {
+      isEnabled: false,
+    })
+    setup.setAbilityParam('attacker', 'SPACE_CANNON_OFFENSE', {
+      isEnabled: false,
+    })
+    setup.setAbilityParam('defender', 'SPACE_CANNON_DEFENSE', {
+      isEnabled: false,
+    })
+
+    const config = setup.toSerializedConfig()
+
+    expect(config.aa['ANTI_FIGHTER_BARRAGE']).toEqual({ isEnabled: false })
+    expect(config.aa['SPACE_CANNON_OFFENSE']).toEqual({ isEnabled: false })
+    expect(config.da['SPACE_CANNON_DEFENSE']).toEqual({ isEnabled: false })
+  })
+
   it('uses S/G for combat mode', () => {
     const setup = new CombatSetup()
     expect(setup.toSerializedConfig().m).toBe('S')
@@ -93,6 +112,32 @@ describe('loadConfig', () => {
     restored.loadConfig(serialized)
 
     expect(restored.abilities.attacker['DIRECT_HIT']?.uses).toBe(3)
+  })
+
+  it('preserves disabled step abilities through roundtrip', () => {
+    const original = new CombatSetup()
+    original.setAbilityParam('attacker', 'ANTI_FIGHTER_BARRAGE', {
+      isEnabled: false,
+    })
+    original.setAbilityParam('attacker', 'SPACE_CANNON_OFFENSE', {
+      isEnabled: false,
+    })
+    original.setAbilityParam('defender', 'SPACE_CANNON_DEFENSE', {
+      isEnabled: false,
+    })
+
+    const restored = new CombatSetup()
+    restored.loadConfig(original.toSerializedConfig())
+
+    expect(restored.abilities.attacker['ANTI_FIGHTER_BARRAGE']?.isEnabled).toBe(
+      false,
+    )
+    expect(restored.abilities.attacker['SPACE_CANNON_OFFENSE']?.isEnabled).toBe(
+      false,
+    )
+    expect(restored.abilities.defender['SPACE_CANNON_DEFENSE']?.isEnabled).toBe(
+      false,
+    )
   })
 
   it('preserves URL-loaded UNIT_PRIORITY order through final reconcile', () => {
