@@ -243,7 +243,7 @@ interface AbilityCallContext {
 }
 ```
 
-`own` / `opponent` are relative to the ability's side, not attacker/defender. The call context additionally exposes dice-roll declaration helpers (`declareReroll`, `declareHitPoolTransform`), `transitionTo`, `rollDice`, and `resolveStep` — see `docs/dice-math.md` and the type definitions in `abilities-engine/types.ts`.
+`own` / `opponent` are relative to the ability's side, not attacker/defender. The call context additionally exposes dice-roll declaration helpers (`declareReroll`, `declareHitPoolTransform`), `transitionTo`, `rollDice`, and `resolveStep`. Its `firing` override likewise accepts ability-relative `OWN` / `OPPONENT` values and maps them to combat sides internally — see `docs/dice-math.md` and the type definitions in `abilities-engine/types.ts`.
 
 ### `getUnit()`
 

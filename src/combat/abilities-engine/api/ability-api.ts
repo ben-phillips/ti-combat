@@ -1449,7 +1449,7 @@ export class AbilityContext {
     overrides?: {
       dice?: DiceGroup[]
       target?: 'OWN' | 'OPPONENT'
-      firing?: CombatSide[]
+      firing?: ('OWN' | 'OPPONENT')[]
       deferCompletionCheck?: boolean
       abilitiesOverride?: AbilitiesOverride
     },
@@ -1461,7 +1461,10 @@ export class AbilityContext {
     }
 
     const mySide = this._side
-    const firing = overrides?.firing ?? [mySide]
+    const opponentSide = getOpponentSide(mySide)
+    const firing = (overrides?.firing ?? ['OWN']).map(side =>
+      side === 'OWN' ? mySide : opponentSide,
+    )
 
     const customDice:
       | { attacker: SideDiceCollection; defender: SideDiceCollection }

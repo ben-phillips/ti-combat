@@ -274,6 +274,26 @@ describe('SideApi.pushSteps', () => {
   })
 })
 
+describe('AbilityContext.resolveStep', () => {
+  it('maps OWN and OPPONENT firing sides relative to the caller', () => {
+    const cs = makeCombatState()
+    cs.pendingSteps.push({
+      kind: 'timing',
+      timing: 'AFB_STEP',
+      phase: ['SPACE_COMBAT'],
+    })
+    const { ctx } = withAbility(cs, 'defender')
+
+    ctx.resolveStep('AFB', { firing: ['OWN', 'OPPONENT'] })
+
+    const group = cs.pendingSteps.at(-1)
+    if (!group || group.kind !== 'group' || !isDiceRollContext(group.data)) {
+      throw new Error('expected DiceRollContext')
+    }
+    expect(group.data.firing).toEqual(['defender', 'attacker'])
+  })
+})
+
 describe('AbilityContext dice-roll group getters', () => {
   let cs: CombatState
   beforeEach(() => {

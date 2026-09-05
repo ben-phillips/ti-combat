@@ -1,5 +1,4 @@
 import type { Ability } from '@/combat'
-import type { CombatSide } from '@/types'
 
 declare global {
   interface AbilityConfigMap {
@@ -19,11 +18,10 @@ export const antiFighterBarrage: Ability = {
   headerUI: 'isEnabled',
   invoke: [
     {
-      // Both sides barrage simultaneously: a single attacker-driven dispatch
-      // resolves one combined dice-roll group. `firing` lists only the sides
-      // whose AFB is enabled, so a side that opted out simply doesn't roll.
-      // The attacker gate guarantees `own` = attacker and `opponent` =
-      // defender below.
+      // Both sides barrage simultaneously in one combined dice-roll group.
+      // Normally the attacker dispatches it; if the attacker opts out, the
+      // defender does. Keep `firing` relative to whichever side dispatched so
+      // resolveStep can map OWN / OPPONENT to the actual combat sides.
       timing: 'AFB_STEP',
       isCallable: (_params, ctx) => {
         if (ctx.side === 'attacker') {
@@ -34,11 +32,11 @@ export const antiFighterBarrage: Ability = {
           .isEnabled
       },
       call: ctx => {
-        const firing: CombatSide[] = []
+        const firing: ('OWN' | 'OPPONENT')[] = []
         if (ctx.api.own.getAbilityConfig('ANTI_FIGHTER_BARRAGE').isEnabled)
-          firing.push('attacker')
+          firing.push('OWN')
         if (ctx.api.opponent.getAbilityConfig('ANTI_FIGHTER_BARRAGE').isEnabled)
-          firing.push('defender')
+          firing.push('OPPONENT')
         if (firing.length === 0) return
 
         ctx.resolveStep('AFB', {

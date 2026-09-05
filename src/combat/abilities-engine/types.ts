@@ -347,12 +347,12 @@ export interface AbilityCallContext {
    *   - `dice`   — custom dice pool for the firing side; skips collectDice
    *   - `target` — where hits land. `'OPPONENT'` (default) or `'OWN'`
    *                (self-damage, e.g. Proxima's second roll)
-   *   - `firing` — sides that roll in this step. Defaults to `[ctx.side]`.
-   *                Pass `['attacker', 'defender']` for a single combined
-   *                roll where both sides fire simultaneously (AFB): one
-   *                dice-roll group, each side's hits landing on its natural
-   *                opponent. A side that opted out is dropped by the
-   *                unit-ability hard-block, so per-side toggles still work.
+   *   - `firing` — ability-relative sides that roll in this step. Defaults
+   *                to `['OWN']`. Pass `['OWN', 'OPPONENT']` for a single
+   *                combined roll where both sides fire simultaneously (AFB):
+   *                one dice-roll group, each side's hits landing on its
+   *                natural opponent. Relative sides are mapped to attacker /
+   *                defender within `resolveStep`.
    *   - `deferCompletionCheck` — when true, omit the post-assign-hits
    *                wipe-out check at the end of this step. Use to chain
    *                multiple `resolveStep` calls as one transaction so an
@@ -368,7 +368,7 @@ export interface AbilityCallContext {
     overrides?: {
       dice?: DiceGroup[]
       target?: 'OWN' | 'OPPONENT'
-      firing?: CombatSide[]
+      firing?: ('OWN' | 'OPPONENT')[]
       deferCompletionCheck?: boolean
       /** Ability params overrides for this resolution only — immutable and
        *  applied over base + live params. Boolean shorthand = `{ isEnabled }`.

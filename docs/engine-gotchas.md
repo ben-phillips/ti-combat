@@ -17,6 +17,11 @@ a check there too.
   invoke instead (see `onPrepare` in
   `tf-unit-upgrade/create-tf-unit-upgrade.ts`, added for Hel-Titan).
 
+- **`resolveStep` side overrides are ability-relative.** Pass `OWN` /
+  `OPPONENT` in `firing`; `resolveStep` maps them to attacker / defender from
+  `ctx.side`. Passing absolute sides breaks steps dispatched by the defender
+  (the attacker-disabled AFB path is the reference case).
+
 - **Invoke dedup is by object identity.** Two abilities sharing the same
   invoke objects (e.g. a shallow-cloned ability with a new key) fire only
   once between them. When re-keying a clone, clone the invokes too:
