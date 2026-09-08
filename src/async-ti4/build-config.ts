@@ -1,5 +1,6 @@
 import type { Ability } from '@/combat'
 import { UNIT_LIMITS } from '@/constants/units'
+import factions from '@/data/faction'
 import type { SerializedConfig } from '@/hooks/combat-setup/serialization'
 import type { FactionKey, UnitBaseType, UnitList } from '@/types'
 
@@ -15,6 +16,7 @@ import {
 } from './mappings'
 import {
   type AsyncEntity,
+  type AsyncPlayer,
   type BattleLocation,
   EXPECTED_SCHEMA_VERSION,
   type WebData,
@@ -95,6 +97,75 @@ function entitiesForBattle(
   return [...entitiesAt(data, location, asyncFactionId), ...inSpace]
 }
 
+/** Upstream aliases the Alliance promissory note `<colour>_an`. */
+const ALLIANCE_SUFFIX = '_an'
+
+/** Whether this player's commander has come off its unlock condition.
+ *
+ *  Only an explicit `false` counts as unlocked. A commander the import misses
+ *  is one the user can switch on themselves; one it invents changes the odds
+ *  under them, so an absent flag leaves the card alone. */
+function hasUnlockedCommander(player: AsyncPlayer | undefined): boolean {
+  return (player?.leaders ?? []).some(
+    leader => leader.type === 'commander' && leader.locked === false,
+  )
+}
+
+/** The commander ability this calculator models for a faction, if any.
+ *
+ *  Read off the faction sheets rather than a table of its own, so modelling a
+ *  new commander is enough to make the import carry it. Most commanders do
+ *  nothing to a combat and aren't modelled at all; those resolve to nothing
+ *  and are skipped in silence. */
+function commanderAbilityKey(asyncFactionId: string): string | undefined {
+  const factionKey = FACTION_BY_ASYNC_ID[asyncFactionId]
+  return factionKey
+    ? factions[factionKey]?.abilities?.commander?.[0]?.key
+    : undefined
+}
+
+/** Every commander this side can use.
+ *
+ *  A commander is on from the moment it unlocks — nothing to spend, nothing
+ *  to exhaust — so an unlocked one belongs in the import rather than being
+ *  left for the user to remember. A side can also be using someone else's:
+ *  an Alliance note in the play area lends its owner's, and Mahact's Imperia
+ *  ("while another player's command token is in your fleet pool, you can use
+ *  the ability of that player's commander, if it is unlocked") does the same
+ *  for every colour in their fleet pool. Both borrow on the same condition —
+ *  the lender's own commander has to be unlocked — so both resolve through
+ *  the same colour lookup. Mahact purges its Alliance note on setup, so the
+ *  two routes never overlap. */
+function commanderKeys(data: WebData, asyncFactionId: string): string[] {
+  const player = data.playerData.find(p => p.faction === asyncFactionId)
+  if (!player) return []
+
+  const lenders = [
+    ...(hasUnlockedCommander(player) ? [asyncFactionId] : []),
+    ...borrowedFrom(data, player),
+  ]
+  return lenders
+    .map(commanderAbilityKey)
+    .filter((key): key is string => key !== undefined)
+}
+
+/** The faction ids whose commanders this player is borrowing. */
+function borrowedFrom(data: WebData, player: AsyncPlayer): string[] {
+  const colours = [
+    ...(player.promissoryNotesInPlayArea ?? [])
+      .filter(note => note.endsWith(ALLIANCE_SUFFIX))
+      .map(note => note.slice(0, -ALLIANCE_SUFFIX.length)),
+    ...(player.mahactEdict ?? []),
+  ]
+
+  const borrowed: string[] = []
+  for (const colour of colours) {
+    const lender = data.playerData.find(p => p.color === colour)
+    if (lender && hasUnlockedCommander(lender)) borrowed.push(lender.faction)
+  }
+  return borrowed
+}
+
 function buildSide(
   data: WebData,
   location: BattleLocation,
@@ -169,6 +240,17 @@ function buildSide(
   for (const owned of player?.unitsOwned ?? []) {
     const abilityKey = ABILITY_BY_TF_UNIT[owned]
     if (abilityKey && abilityLookup.has(abilityKey)) {
+      abilities[abilityKey] = { isEnabled: true }
+    }
+  }
+
+  // A commander borrowed through an Alliance note belongs to another faction,
+  // which the cross-faction commander pool already offers every side. One that
+  // doesn't fit — a side that has no commanders at all, or a commander whose
+  // card only bears on the other side of the fight — is dropped by
+  // `loadConfig` the same way a mismatched tech is.
+  for (const abilityKey of commanderKeys(data, asyncFactionId)) {
+    if (abilityLookup.has(abilityKey)) {
       abilities[abilityKey] = { isEnabled: true }
     }
   }

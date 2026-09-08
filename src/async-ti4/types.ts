@@ -52,6 +52,24 @@ const PlayerSchema = z.object({
   /** Twilight's Fall keeps its unit upgrades here rather than in `techs`. */
   unitsOwned: soft(z.array(z.string())),
   galvanizeTokensReinf: soft(z.number()),
+  /** Leader cards and their state. `locked` is what says whether a commander
+   *  has unlocked yet; Twilight's Fall has no commanders and leaves this
+   *  empty. */
+  leaders: soft(
+    z.array(
+      z.object({
+        id: z.string(),
+        type: z.string(),
+        locked: soft(z.boolean()),
+      }),
+    ),
+  ),
+  /** Promissory notes face-up in the play area. An Alliance note is aliased
+   *  `<colour>_an` upstream and lends its owner's commander. */
+  promissoryNotesInPlayArea: soft(z.array(z.string())),
+  /** Player colours whose command tokens sit in Mahact's fleet pool, which is
+   *  what their Imperia ability lends a commander through. */
+  mahactEdict: soft(z.array(z.string())),
 })
 
 /** The battle AsyncTI4 has open right now, if any. `unitHolder` is either

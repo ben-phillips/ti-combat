@@ -5,7 +5,11 @@ import { describe, expect, it } from 'vitest'
 import { buildImportConfig } from '@/async-ti4/build-config'
 import { parseGameId } from '@/async-ti4/fetch-game'
 import { findActiveCombat, listBattleLocations } from '@/async-ti4/locations'
-import { type BattleLocation, WebDataSchema } from '@/async-ti4/types'
+import {
+  type BattleLocation,
+  type WebData,
+  WebDataSchema,
+} from '@/async-ti4/types'
 import { getAllAbilities } from '@/hooks/combat-setup/get-available-abilities'
 import { buildAbilityLookup } from '@/hooks/combat-setup/validation'
 
@@ -374,6 +378,97 @@ describe('buildImportConfig', () => {
     expect(notes.join(' ')).toContain(
       'X-89 Bacterial Weapon (pre-\u03a9 printing)',
     )
+  })
+})
+
+describe('commanders', () => {
+  /** Re-runs the 104 import against an edited copy of the game. */
+  function importFrom(
+    edit: (game: WebData) => void,
+    attacker: string,
+    defender: string,
+  ) {
+    const doctored = structuredClone(data)
+    edit(doctored)
+    return buildImportConfig(
+      doctored,
+      { location: locationAt('104'), attacker, defender },
+      abilityLookup,
+    ).config
+  }
+
+  function commanderOf(game: WebData, faction: string) {
+    return game.playerData
+      .find(p => p.faction === faction)!
+      .leaders!.find(l => l.type === 'commander')!
+  }
+
+  it('switches on a commander that has unlocked', () => {
+    // Nothing is spent to use a commander and it never exhausts, so an
+    // unlocked one is simply on for the whole battle.
+    const config = importAt('104', 'sardakk', 'sol').config
+    expect(config.aa.GHOM_SEKKUS).toEqual({ isEnabled: true })
+    expect(config.da.CLAIRE_GIBSON).toEqual({ isEnabled: true })
+  })
+
+  it('leaves a commander that is still locked alone', () => {
+    const config = importFrom(
+      game => {
+        commanderOf(game, 'sardakk').locked = true
+      },
+      'sardakk',
+      'sol',
+    )
+    expect(config.aa.GHOM_SEKKUS).toBeUndefined()
+    // Sol's is untouched, so this is the lock and not the whole feature.
+    expect(config.da.CLAIRE_GIBSON).toEqual({ isEnabled: true })
+  })
+
+  it('lends a commander to whoever holds the Alliance note', () => {
+    // Bastion has `sunset_an` in its play area \u2014 Sardakk's Alliance note \u2014
+    // and Bastion's own commander is not one this calculator models, so
+    // G'hom Sek'kus here can only have come across the table.
+    const config = importAt('104', 'bastion', 'muaat').config
+    expect(config.aa.GHOM_SEKKUS).toEqual({ isEnabled: true })
+  })
+
+  it('lends nothing while the lender is still locked', () => {
+    const config = importFrom(
+      game => {
+        commanderOf(game, 'sardakk').locked = true
+      },
+      'bastion',
+      'muaat',
+    )
+    expect(config.aa.GHOM_SEKKUS).toBeUndefined()
+  })
+
+  it("lends a commander through Mahact's fleet pool", () => {
+    // Imperia reads a command token in the fleet pool the way everyone else
+    // reads an Alliance note. No Mahact in this game, so seat one: upstream
+    // names the borrowed player by colour, and Sardakk is `sunset`.
+    const config = importFrom(
+      game => {
+        const player = game.playerData.find(p => p.faction === 'deepwrought')!
+        player.faction = 'mahact'
+        player.mahactEdict = ['sunset']
+      },
+      'mahact',
+      'muaat',
+    )
+    expect(config.af).toBe('MAHACT_GENE_SORCERERS')
+    expect(config.aa.GHOM_SEKKUS).toEqual({ isEnabled: true })
+  })
+
+  it('gives nobody a commander they have no claim on', () => {
+    // Muaat's own is locked, and Cabal's play area holds Muaat's Alliance note
+    // beside Sardakk's Support for the Throne. A play area is not a claim: the
+    // Alliance lends a locked commander, and Support for the Throne — whose
+    // owner's commander is unlocked and modelled — lends nothing at all.
+    const config = importAt('104', 'muaat', 'cabal').config
+    expect(config.aa.GHOM_SEKKUS).toBeUndefined()
+    expect(config.da.GHOM_SEKKUS).toBeUndefined()
+    expect(config.da.CLAIRE_GIBSON).toBeUndefined()
   })
 })
 
