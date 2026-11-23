@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CombatEngine,
   CombatSideState,
-  extractSyncSources,
   makeUnitLocator,
   withRunningAbility,
 } from '@/combat'
@@ -13,7 +12,6 @@ import {
   labelUnitOptions,
   groupUnitOptions,
 } from '@/components/abilities-panel/components/unit-option-presentation'
-import { SHIPS } from '@/constants/units'
 import { CombatSetup } from '@/hooks/combat-setup'
 import { validateSerializedConfig } from '@/hooks/combat-setup/validation'
 import {
@@ -21,7 +19,6 @@ import {
   searchParamsToConfig,
 } from '@/hooks/use-url-sync'
 import type {
-  CombatSide,
   SurfaceDefinition,
   SurfaceId,
   UnitBaseType,
@@ -32,6 +29,7 @@ import type {
 import { SPACE_SURFACE_ID, UnitListSchema } from '@/types'
 
 import { combatTest } from './utils/combat-test'
+import { setupOptions } from './utils/setup-options'
 import { getSurfaceUnitIds } from './utils/surface-units'
 
 const SPACE = SPACE_SURFACE_ID
@@ -60,21 +58,7 @@ function setupWithAlastor() {
   return setup
 }
 
-function options(
-  setup: CombatSetup,
-  abilityKey: string,
-  param: string,
-  side: CombatSide = 'attacker',
-) {
-  const ability = setup
-    .getAvailableAbilities(side)
-    .find(item => item.key === abilityKey)!
-  const ctx = setup.getReadContext(side)
-  const spec = extractSyncSources(ability)?.find(item => item.key === param)
-  return withRunningAbility(ctx, ability, () =>
-    ctx.api[spec?.side ?? 'own'].getUnitVariantsOptions(param),
-  )
-}
+const options = setupOptions
 
 function keys(
   setup: CombatSetup,
@@ -120,9 +104,9 @@ describe('surface-aware unit settings', () => {
       ['DURANIUM_ARMOR', 'groundRepairPriority'],
     ]) {
       expect(options(setup, ability, param).map(item => item.value)).toContain(
-        target('MECH', P1),
+        'MECH',
       )
-      expect(keys(setup, ability, param)).toContain(target('MECH', P1))
+      expect(keys(setup, ability, param)).toContain('MECH')
     }
     const t = combatTest({
       mode: 'GROUND',
@@ -142,10 +126,15 @@ describe('surface-aware unit settings', () => {
     expect(t.abilityLog('DURANIUM_ARMOR')).not.toHaveLength(0)
   })
 
-  it('offers future system targets on legal surfaces while respecting explicit availability filters', () => {
+  it('offers system targets where units stand while respecting explicit availability filters', () => {
     const setup = new CombatSetup('FULL')
     setup.setFaction('attacker', 'LAST_BASTION')
     setup.addPlanet()
+    expect(options(setup, 'PRE_GALVANIZED', 'galvanizedUnits')).toEqual([])
+    setup.setSurfaceUnitCount('attacker', SPACE, 'DREADNOUGHT', 1)
+    for (const surface of [SPACE, P1, P2])
+      setup.setSurfaceUnitCount('attacker', surface, 'INFANTRY', 1)
+    setup.setSurfaceUnitCount('attacker', P2, 'PDS', 1)
     const items = options(setup, 'DAME_BRIAR', 'spaceUnitType').map(
       item => item.value,
     )
@@ -159,7 +148,7 @@ describe('surface-aware unit settings', () => {
       ]),
     )
     expect(items).not.toContain(target('DREADNOUGHT', P2))
-    expect(options(setup, 'PRE_GALVANIZED', 'galvanizedUnits')).toEqual([])
+    expect(items).not.toContain(target('PDS', P1))
   })
 
   it('retains preferences when starting units are removed', () => {
@@ -174,32 +163,57 @@ describe('surface-aware unit settings', () => {
       boolean,
     ][]
     expect(new Map(priority).get(target('DREADNOUGHT', SPACE))).toBe(false)
+    // Absent units are hidden until they are placed again.
     expect(
-      options(setup, 'DURANIUM_ARMOR', 'spaceRepairPriority').map(
-        item => item.value,
-      ),
-    ).toContain(target('DREADNOUGHT', SPACE))
+      options(setup, 'SUSTAIN_DAMAGE', 'spacePriority').map(item => item.value),
+    ).not.toContain(target('DREADNOUGHT', SPACE))
+    expect(setup.toSerializedConfig().aa.SUSTAIN_DAMAGE).toBeUndefined()
+
+    setup.setSurfaceUnitCount('attacker', SPACE, 'DREADNOUGHT', 1)
+    const restored = setup.abilities.attacker.SUSTAIN_DAMAGE.spacePriority as [
+      UnitLocator,
+      boolean,
+    ][]
+    expect(new Map(restored).get(target('DREADNOUGHT', SPACE))).toBe(false)
   })
 
-  it('offers every eligible type and extends Alastor ground forces to each surface', () => {
+  it('keeps a custom order for a unit removed and placed again', () => {
+    const setup = new CombatSetup('FULL')
+    for (const type of ['DESTROYER', 'CRUISER', 'DREADNOUGHT'] as const)
+      setup.setSurfaceUnitCount('attacker', SPACE, type, 1)
+    const order = [
+      target('DREADNOUGHT', SPACE),
+      target('DESTROYER', SPACE),
+      target('CRUISER', SPACE),
+    ]
+    setup.setAbilityParam('attacker', 'UNIT_PRIORITY', {
+      ...setup.abilities.attacker.UNIT_PRIORITY,
+      spaceUnitPriority: order.map(key => [key]),
+    })
+
+    setup.setSurfaceUnitCount('attacker', SPACE, 'DREADNOUGHT', 0)
+    expect(
+      options(setup, 'UNIT_PRIORITY', 'spaceUnitPriority').map(
+        item => item.value,
+      ),
+    ).not.toContain(target('DREADNOUGHT', SPACE))
+    setup.setSurfaceUnitCount('attacker', SPACE, 'DREADNOUGHT', 1)
+    expect(keys(setup, 'UNIT_PRIORITY', 'spaceUnitPriority')).toEqual(order)
+  })
+
+  it('offers the fielded units and extends Alastor ground forces to their surfaces', () => {
     const setup = setupWithAlastor()
     const items = options(setup, 'UNIT_PRIORITY', 'spaceUnitPriority')
-    expect(items.map(item => item.value)).toEqual(
-      expect.arrayContaining([
+    expect(items.map(item => item.value).toSorted()).toEqual(
+      [
         target('FLAGSHIP', SPACE),
         target('INFANTRY', SPACE),
         target('INFANTRY', P1),
         target('INFANTRY', P2),
         target('MECH', P1),
         target('MECH', P2),
-      ]),
+      ].toSorted(),
     )
-    expect(items.map(item => item.value)).not.toContain(target('PDS', P2))
-    expect(items).toHaveLength(SHIPS.length + 6)
-    expect(items.map(item => item.value)).toContain(
-      target('DREADNOUGHT', SPACE),
-    )
-    expect(items.map(item => item.value)).toContain(target('MECH', SPACE))
     expect(keys(setup, 'UNIT_PRIORITY', 'spaceUnitPriority')).toEqual(
       items.map(item => item.value),
     )
@@ -208,25 +222,23 @@ describe('surface-aware unit settings', () => {
       options(setup, 'UNIT_PRIORITY', 'spaceUnitPriority').map(
         item => item.value,
       ),
-    ).toEqual(expect.arrayContaining(SHIPS.map(type => target(type, SPACE))))
-    expect(options(setup, 'UNIT_PRIORITY', 'spaceUnitPriority')).toHaveLength(
-      SHIPS.length,
-    )
+    ).toEqual([target('FLAGSHIP', SPACE)])
   })
 
   it('offers Alastor ground forces only where the simplified editor puts them', () => {
     const setup = new CombatSetup('SIMPLIFIED')
     setup.setFaction('attacker', 'NEKRO_VIRUS')
     setup.setUnitCount('attacker', 'FLAGSHIP', 1)
+    setup.setUnitCount('attacker', 'INFANTRY', 2)
+    setup.setUnitCount('attacker', 'MECH', 1)
     const items = options(setup, 'UNIT_PRIORITY', 'spaceUnitPriority')
-    expect(items.map(item => item.value)).toEqual(
-      expect.arrayContaining([
-        ...SHIPS.map(type => target(type, SPACE)),
+    expect(items.map(item => item.value).toSorted()).toEqual(
+      [
+        target('FLAGSHIP', SPACE),
         target('INFANTRY', SPACE),
         target('MECH', SPACE),
-      ]),
+      ].toSorted(),
     )
-    expect(items).toHaveLength(SHIPS.length + 2)
     expect(labelUnitOptions(items).map(item => item.label)).toEqual(
       expect.arrayContaining(['Infantry', 'Mech']),
     )
@@ -235,13 +247,6 @@ describe('surface-aware unit settings', () => {
     )
 
     setup.setEditorMode('FULL')
-    expect(
-      options(setup, 'UNIT_PRIORITY', 'spaceUnitPriority').map(
-        item => item.value,
-      ),
-    ).toEqual(
-      expect.arrayContaining([target('INFANTRY', P1), target('MECH', P1)]),
-    )
     setup.setEditorMode('SIMPLIFIED')
     expect(keys(setup, 'UNIT_PRIORITY', 'spaceUnitPriority')).toEqual(
       items.map(item => item.value),
@@ -468,17 +473,13 @@ describe('surface-aware unit settings', () => {
     if (priorityControl?.type !== 'unit-list')
       throw new Error('Expected unit list')
     expect(priorityControl.items).toEqual(items)
+    // The defender fields nothing to target.
     expect(
       options(setup, 'SPACE_CANNON_OFFENSE', 'unitPriority', 'attacker'),
-    ).toHaveLength(SHIPS.length)
-    expect(
-      options(setup, 'SPACE_CANNON_OFFENSE', 'unitPriority', 'attacker').every(
-        item => item.surfaceId === SPACE,
-      ),
-    ).toBe(true)
+    ).toEqual([])
   })
 
-  it('projects committed ground forces and fighters onto the selected planet', () => {
+  it('offers committed ground forces and fighters by type', () => {
     const setup = new CombatSetup('FULL')
     setup.setFaction('attacker', 'NAALU_COLLECTIVE')
     setup.addPlanet()
@@ -487,24 +488,52 @@ describe('surface-aware unit settings', () => {
     setup.setSurfaceUnitCount('attacker', SPACE, 'INFANTRY', 1)
     setup.setSurfaceUnitCount('attacker', P1, 'INFANTRY', 1)
     setup.setCombatMode('GROUND')
-    expect(
-      options(setup, 'UNIT_PRIORITY', 'groundUnitPriority').map(
-        item => item.value,
-      ),
-    ).toEqual(
-      expect.arrayContaining([target('FIGHTER', P2), target('INFANTRY', P2)]),
+    const values = options(setup, 'UNIT_PRIORITY', 'groundUnitPriority').map(
+      item => item.value,
     )
-    expect(
+    expect(values).toEqual(expect.arrayContaining(['FIGHTER', 'INFANTRY']))
+    expect(values.filter(value => value === 'INFANTRY')).toHaveLength(1)
+  })
+
+  it('offers one ground choice per type across invaded planets', () => {
+    const setup = new CombatSetup('FULL')
+    setup.addPlanet()
+    setup.setCombatMode('GROUND')
+    setup.setSurfaceUnitCount('attacker', P1, 'INFANTRY', 1)
+    setup.setSurfaceUnitCount('attacker', P2, 'INFANTRY', 2)
+    setup.setSurfaceUnitCount('attacker', P2, 'MECH', 1)
+    const values = () =>
       options(setup, 'UNIT_PRIORITY', 'groundUnitPriority').map(
         item => item.value,
-      ),
-    ).not.toContain(target('INFANTRY', P1))
+      )
+    expect(values()).toEqual(['INFANTRY', 'MECH'])
     setup.selectPlanet(P1)
-    expect(
-      options(setup, 'UNIT_PRIORITY', 'groundUnitPriority').map(
-        item => item.value,
-      ),
-    ).toContain(target('FIGHTER', P1))
+    expect(values()).toEqual(['INFANTRY', 'MECH'])
+  })
+
+  it('collapses stored per-planet ground choices to types', () => {
+    const setup = new CombatSetup('FULL')
+    setup.addPlanet()
+    setup.setCombatMode('GROUND')
+    for (const surface of [P1, P2])
+      setup.setSurfaceUnitCount('attacker', surface, 'MECH', 1)
+    setup.setSurfaceUnitCount('attacker', P1, 'INFANTRY', 1)
+    setup.setAbilityParam('attacker', 'UNIT_PRIORITY', {
+      ...setup.abilities.attacker.UNIT_PRIORITY,
+      groundUnitPriority: [
+        [target('MECH', P2)],
+        [target('INFANTRY', P1)],
+        [target('MECH', P1)],
+      ],
+    })
+    expect(keys(setup, 'UNIT_PRIORITY', 'groundUnitPriority')).toEqual([
+      'MECH',
+      'INFANTRY',
+    ])
+    setup.setAbilityParam('attacker', 'EVELYN_DELOUIS', {
+      unitType: target('MECH', P2),
+    })
+    expect(setup.abilities.attacker.EVELYN_DELOUIS.unitType).toBe('MECH')
   })
 
   it('preserves custom qualified choices through URL loading', () => {
@@ -560,14 +589,17 @@ describe('surface-aware unit settings', () => {
     expect(UnitListSchema.safeParse([['@broken']]).success).toBe(false)
   })
 
-  it('uses declarations to expose remote choices even before units are placed', () => {
+  it('uses declarations to expose remote choices for placed units only', () => {
     const setup = new CombatSetup('FULL')
     setup.setFaction('attacker', 'NEKRO_VIRUS')
     setup.addPlanet()
-    for (const surface of [SPACE, P1, P2]) {
-      const items = options(setup, 'DURANIUM_ARMOR', 'spaceRepairPriority')
-      expect(items.map(item => item.value)).toContain(target('MECH', surface))
-    }
+    setup.setSurfaceUnitCount('attacker', P2, 'MECH', 1)
+    setup.setSurfaceUnitCount('attacker', P2, 'PDS', 1)
+    const items = options(setup, 'DURANIUM_ARMOR', 'spaceRepairPriority').map(
+      item => item.value,
+    )
+    expect(items).toContain(target('MECH', P2))
+    expect(items).not.toContain(target('MECH', P1))
     expect(
       options(setup, 'UNIT_PRIORITY', 'spaceUnitPriority').map(
         item => item.value,
@@ -624,12 +656,12 @@ describe('surface-aware unit settings', () => {
       options(setup, 'UNIT_PRIORITY', 'groundUnitPriority').map(
         item => item.value,
       ),
-    ).toContain(target('MECH:Galvanized', P1))
+    ).toContain('MECH:Galvanized')
     expect(
       options(setup, 'SUSTAIN_DAMAGE', 'groundPriority').map(
         item => item.value,
       ),
-    ).toContain(target('MECH:Galvanized', P1))
+    ).toContain('MECH:Galvanized')
   })
 
   it('preserves qualified selections through the simulation worker boundary', () => {
@@ -666,14 +698,14 @@ describe('surface-aware unit settings', () => {
     }
   })
 
-  it('keeps choices for an unselected planet through planet and mode switches', () => {
+  it('keeps ground choices through planet and mode switches', () => {
     const setup = new CombatSetup('FULL')
     setup.addPlanet()
     setup.setCombatMode('GROUND')
     for (const surface of [P1, P2])
       setup.setSurfaceUnitCount('attacker', surface, 'MECH', 1)
     setup.setAbilityParam('attacker', 'SUSTAIN_DAMAGE', {
-      groundPriority: [[target('MECH', P2), false]],
+      groundPriority: [['MECH', false]],
     })
     setup.selectPlanet(P1)
     setup.setCombatMode('SPACE')
@@ -685,12 +717,12 @@ describe('surface-aware unit settings', () => {
         boolean,
       ][],
     )
-    expect(enabled.get(target('MECH', P2))).toBe(false)
+    expect(enabled.get('MECH')).toBe(false)
     expect(
       options(setup, 'SUSTAIN_DAMAGE', 'groundPriority').map(
         item => item.value,
       ),
-    ).not.toContain(target('MECH', P1))
+    ).toEqual(['MECH'])
   })
 
   it('keeps a space cannon priority through a ground combat', () => {
@@ -710,23 +742,18 @@ describe('surface-aware unit settings', () => {
     expect(keys(setup, 'SPACE_CANNON_OFFENSE', 'unitPriority')).toEqual(custom)
   })
 
-  it('moves a single ground choice to the selected planet by unit type', () => {
+  it('keeps a single ground choice by type through mode switches', () => {
     const setup = new CombatSetup('FULL')
     setup.setFaction('attacker', 'FEDERATION_OF_SOL')
     setup.addPlanet()
+    setup.setSurfaceUnitCount('attacker', P1, 'MECH', 1)
+    setup.setSurfaceUnitCount('attacker', P2, 'MECH', 1)
     setup.setCombatMode('GROUND')
-    setup.setAbilityParam('attacker', 'EVELYN_DELOUIS', {
-      unitType: target('MECH', P2),
-    })
+    setup.setAbilityParam('attacker', 'EVELYN_DELOUIS', { unitType: 'MECH' })
     setup.setCombatMode('SPACE')
-    expect(setup.abilities.attacker.EVELYN_DELOUIS.unitType).toBe(
-      target('MECH', P2),
-    )
     setup.setCombatMode('GROUND')
     setup.selectPlanet(P1)
-    expect(setup.abilities.attacker.EVELYN_DELOUIS.unitType).toBe(
-      target('MECH', P1),
-    )
+    expect(setup.abilities.attacker.EVELYN_DELOUIS.unitType).toBe('MECH')
   })
 
   it('follows the listed planet when fighter-last custom hits span surfaces', () => {

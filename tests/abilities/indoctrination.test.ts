@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import { CombatSetup } from '@/hooks/combat-setup'
+
 import { combatTest } from '../utils/combat-test'
+import { hitOrderUnits, setAbility } from '../utils/setup-options'
 
 describe.forEachSide('INDOCTRINATION', () => {
   it('replaces 1 opponent infantry with own infantry', () => {
@@ -97,5 +100,17 @@ describe.forEachSide('INDOCTRINATION', () => {
     expect(t.defender.units.INFANTRY).toHaveLength(1)
     const remaining = t.defender.units.INFANTRY!
     expect(remaining[0]?.subtypes).toContain('Galvanized')
+  })
+
+  it('declares its infantry for the hit order', () => {
+    const setup = new CombatSetup()
+    setup.setFaction('attacker', 'YIN_BROTHERHOOD')
+    setup.setCombatMode('GROUND')
+    setup.setUnitCount('attacker', 'MECH', 1)
+    const infantry = 'INFANTRY'
+    expect(hitOrderUnits(setup, 'GROUND')).not.toContain(infantry)
+
+    setAbility(setup, 'attacker', 'INDOCTRINATION', { isEnabled: true })
+    expect(hitOrderUnits(setup, 'GROUND')).toContain(infantry)
   })
 })

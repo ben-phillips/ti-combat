@@ -1024,21 +1024,21 @@ export class CombatSideState {
     const categories: readonly UnitCategory[] = Array.isArray(source)
       ? source
       : [source]
-    // Stand-ins carry the declared changes: their stats and grants.
-    const standIns = s.optionMetadata?.standIns ?? s
-    const alive = standIns.participatingUnits + standIns.nonParticipatingUnits
+    // The setup model carries the declared changes: stats and grants.
+    const model = s.optionMetadata?.model ?? s
+    const alive = model.participatingUnits + model.nonParticipatingUnits
     const result: UnitBaseType[] = []
     const add = (type: UnitBaseType) => {
       if (!result.includes(type)) result.push(type)
     }
     for (const category of categories) {
       for (const type of UNIT_TYPES) {
-        if (isNativeCategory(standIns, type, category, phase)) add(type)
+        if (isNativeCategory(model, type, category, phase)) add(type)
       }
       // Granted types follow the native ones; worth sorts keep ties in order.
-      for (const [id, grant] of Object.entries(standIns.unitGrants ?? {})) {
+      for (const [id, grant] of Object.entries(model.unitGrants ?? {})) {
         if (grant === category && alive.includes(id))
-          add(parseUnitLocator(standIns.unitType[id]).baseType)
+          add(parseUnitLocator(model.unitType[id]).baseType)
       }
     }
     return result
@@ -1174,6 +1174,7 @@ export class CombatSideState {
     source: HitSource,
     sourceSurfaceId?: SurfaceId,
     instanceModifiers: readonly HitValueModifierDecl[] = [],
+    sourceUnits?: readonly UnitId[],
   ): SideDiceCollection {
     const s = state[side]
     const collection: SideDiceCollection = {}
@@ -1189,6 +1190,7 @@ export class CombatSideState {
     const walk = (pool: UnitIdList) => {
       for (const id of pool) {
         if (sourceSurfaceId && s.unitSurface[id] !== sourceSurfaceId) continue
+        if (sourceUnits && !sourceUnits.includes(id as UnitId)) continue
         const key = s.unitType[id]
         const { baseType: type } = parseUnitLocator(key)
 

@@ -1,3 +1,4 @@
+import { UNIT_LIMITS } from '@/constants/units'
 import {
   type CombatSide,
   SPACE_SURFACE_ID,
@@ -14,20 +15,31 @@ import {
   filterDeclaredSubtypes,
 } from '../combat-side-state/combat-side-state'
 import { getCombatMeta } from '../combat-state/phase-utils'
-import type { CombatMode, SideStateData } from '../combat-state/types'
+import type {
+  CombatMode,
+  InvasionState,
+  SideStateData,
+} from '../combat-state/types'
 import { parseUnitLocator } from '../utils/parse-unit-locator'
-import { expandWithSubtypes, sortBaseTypes } from '../utils/sort-unit-options'
+import { resolveUnitStats } from '../utils/resolve-unit-stats'
+import {
+  expandWithSubtypes,
+  sortBaseTypes,
+  sortVariantsByCombat,
+} from '../utils/sort-unit-options'
 import { isUnitCategory } from '../utils/unit-combat-properties'
 import { makeUnitLocator } from '../utils/unit-locator'
 import { getVariantDisplayName } from '../utils/unit-variant'
-import { resolveVariantLimit } from './param-limit'
-import type { SyncSourceConfig, UnitOption } from './types'
+import { countUnitsByBaseType, resolveVariantLimit } from './param-limit'
+import type { SyncSourceConfig, UnitOption, UnitSplit } from './types'
 
 export interface UnitOptionContext {
   combatMode: CombatMode
   activeSurfaceId?: SurfaceId
   surfaces?: readonly SurfaceDefinition[]
   side: CombatSide
+  /** A multi-planet invasion fights on all its planets. */
+  invasion?: InvasionState
   /** Treat every surface of the option's mode as active. Reconcile uses this
    *  so choices for an unselected planet survive planet and mode switches. */
   allSurfaces?: boolean
@@ -35,11 +47,34 @@ export interface UnitOptionContext {
 
 type OptionSpec = Pick<
   SyncSourceConfig,
-  'source' | 'filter' | 'scope' | 'limit'
+  'source' | 'filter' | 'scope' | 'limit' | 'split'
 > & {
   sort?: SyncSourceConfig['sort']
   /** Key of the ability declaring the param, for `filter.withAbility`. */
   abilityKey?: string
+}
+
+/** The planets being invaded: every planet of a multi-planet invasion, else
+ *  the active planet (the first planet outside a ground combat). */
+export function foughtPlanetIds(state: {
+  invasion?: InvasionState
+  activeSurfaceId?: SurfaceId
+  surfaces?: readonly SurfaceDefinition[]
+}): SurfaceId[] {
+  if (state.invasion) return [...state.invasion.planets]
+  const planets = (state.surfaces ?? []).filter(s => s.type === 'PLANET')
+  const active = planets.find(planet => planet.id === state.activeSurfaceId)
+  return (active ? [active] : planets.slice(0, 1)).map(planet => planet.id)
+}
+
+/** Each ground combat is fought on one planet, so participant choices apply
+ *  by type on every planet; only a combat drawing units from several
+ *  surfaces (space) or a system-wide choice needs the surface. */
+export function choosesByType(
+  mode: CombatMode,
+  scope: SyncSourceConfig['scope'],
+): boolean {
+  return mode === 'GROUND' && scope === 'participating'
 }
 
 /** Keep the types whose units carry the ability `abilityKey`. */
@@ -51,12 +86,12 @@ function filterAbilityHolders(
   if (abilityKey === undefined)
     throw new Error('filter.withAbility needs the declaring ability key')
   // Reconcile lists the holders as if the ability were switched on;
-  // otherwise the stand-ins carry the declared changes: upgrade cards and
-  // copies.
+  // otherwise the setup model carries the declared changes: upgrade cards
+  // and copies.
   const holders =
     s.optionMetadata?.abilityHolders?.[abilityKey] ??
     CombatSideState.getUnitTypesWithAbility(
-      s.optionMetadata?.standIns ?? s,
+      s.optionMetadata?.model ?? s,
       abilityKey,
     )
   const baseTypes = new Set(
@@ -85,11 +120,25 @@ export function resolveUnitOptions(
   const subtypes = spec.filter?.includeOnlyBaseTypes
     ? []
     : filterDeclaredSubtypes(s.optionMetadata?.subtypes ?? [], spec.filter)
-  const variants = applyVariantPostFilter(
+  const expanded = applyVariantPostFilter(
     expandWithSubtypes(sorted, subtypes, spec.sort),
     spec.filter,
   ) as UnitType[]
+  // The setup model carries the stats active abilities change.
+  const variants =
+    spec.sort === 'combat-asc' || spec.sort === 'combat-desc'
+      ? sortVariantsByCombat(
+          expanded,
+          spec.sort,
+          (s.optionMetadata?.model ?? s).unitStats,
+          s.optionMetadata?.subtypes ?? [],
+        )
+      : expanded
   const surfaces = context.surfaces
+  if (spec.scope === 'planet' && surfaces)
+    return spec.split
+      ? planetOptions(s, spec, spec.split, types, variants, surfaces, phase)
+      : []
   if (spec.scope === 'type' || !surfaces || !context.activeSurfaceId) {
     return variants
       .map(value => ({
@@ -109,9 +158,10 @@ export function resolveUnitOptions(
 
   const surfaceType = mode === 'SPACE' ? 'SPACE' : 'PLANET'
   const candidates = surfaces.filter(surface => surface.type === surfaceType)
+  const fought = context.invasion?.planets ?? [context.activeSurfaceId]
   const selected = context.allSurfaces
     ? candidates
-    : candidates.filter(surface => surface.id === context.activeSurfaceId)
+    : candidates.filter(surface => fought.includes(surface.id))
   const active = new Set(
     (selected.length ? selected : candidates.slice(0, 1)).map(
       surface => surface.id,
@@ -121,31 +171,41 @@ export function resolveUnitOptions(
   const category = mode === 'SPACE' ? 'SHIPS' : 'GROUND_FORCES'
   // Where a unit fights, mirroring `participatesInCombat` and commitment:
   // ships where they stand, ground forces on an active planet, and the
-  // attacker's ground forces from space on the invaded planet. System
-  // controls keep units where they stand.
+  // attacker's ground forces from space on the planet they are committed to
+  // (the first of a multi-planet invasion). System controls keep units where
+  // they stand.
+  const committedTo =
+    context.allSurfaces || !active.has(context.activeSurfaceId)
+      ? [...active]
+      : [context.activeSurfaceId]
   const fightsOn = (side: SideStateData, id: UnitId): readonly SurfaceId[] => {
     const surface = side.unitSurface[id]
     if (spec.scope === 'system') return [surface]
     if (!isUnitCategory(side, id, category, phase)) return []
     if (mode === 'SPACE') return [surface]
     if (surface === SPACE_SURFACE_ID)
-      return context.side === 'attacker' ? [...active] : []
+      return context.side === 'attacker' ? committedTo : []
     return active.has(surface) ? [surface] : []
   }
   const units = (side: SideStateData) =>
     [...side.participatingUnits, ...side.nonParticipatingUnits] as UnitId[]
-  // Choices describe units that may exist later, not just the starting
-  // force: a stand-in of every type on every surface it may stand on decides
-  // where the units it stands for fight.
-  const standIns = s.optionMetadata?.standIns ?? s
+  // Choices describe the units that may fight, not just the starting force:
+  // the setup model adds the units active abilities may place, and its units
+  // decide where the units of their type on their surface fight.
+  const model = s.optionMetadata?.model ?? s
   const offered = new Set(types)
   const reach = new Map<UnitBaseType, Map<SurfaceId, readonly SurfaceId[]>>()
-  for (const id of units(standIns)) {
-    const base = parseUnitLocator(standIns.unitType[id]).baseType
+  for (const id of units(model)) {
+    const base = parseUnitLocator(model.unitType[id]).baseType
     if (!offered.has(base)) continue
     let bySurface = reach.get(base)
     if (!bySurface) reach.set(base, (bySurface = new Map()))
-    bySurface.set(standIns.unitSurface[id], fightsOn(standIns, id))
+    const fights = fightsOn(model, id)
+    const known = bySurface.get(model.unitSurface[id])
+    bySurface.set(
+      model.unitSurface[id],
+      known ? [...new Set([...known, ...fights])] : fights,
+    )
   }
   // Fielded units supply the caps.
   const projected = new Map<SurfaceId, Map<UnitBaseType, Set<UnitId>>>()
@@ -203,5 +263,132 @@ export function resolveUnitOptions(
       })
     })
   }
-  return items
+  return choosesByType(mode, spec.scope) ? mergeSurfaces(items) : items
+}
+
+/** Options of a `planet` param: the variants of the units its split
+ *  divides on every planet, capped at their count, plus a space entry for
+ *  the units that may stay. */
+function planetOptions(
+  s: SideStateData,
+  spec: OptionSpec,
+  split: UnitSplit,
+  types: readonly UnitBaseType[],
+  variants: readonly UnitType[],
+  surfaces: readonly SurfaceDefinition[],
+  phase: ReturnType<typeof getCombatMeta>,
+): UnitOption[] {
+  const option = (variant: UnitType, surfaceId: SurfaceId, max?: number) => {
+    const surfaceOrder = surfaces.findIndex(surface => surface.id === surfaceId)
+    return {
+      label: getVariantDisplayName(variant),
+      value: makeUnitLocator(variant, surfaceId),
+      surfaceId,
+      surfaceName: surfaces[surfaceOrder]?.name,
+      surfaceOrder,
+      ...(max === undefined ? {} : { max }),
+    }
+  }
+  // Any planet of the system can receive units; sending some there makes
+  // it part of the invasion.
+  const planets = surfaces
+    .filter(surface => surface.type === 'PLANET')
+    .map(surface => surface.id)
+  // Split units are fielded; the setup model carries declared grants
+  // (Matriarch's fighters count as ground forces) and subtypes (Galvanized).
+  const model = s.optionMetadata?.model ?? s
+  const offered = new Set(types)
+  const categories = [spec.source].flat()
+  const divides = (id: UnitId, type: UnitType) =>
+    offered.has(parseUnitLocator(type).baseType) &&
+    (spec.filter?.includeNonParticipating ||
+      categories.some(category =>
+        isUnitCategory(model, id, category, phase),
+      )) &&
+    (!split.unitAbility ||
+      !!resolveUnitStats(model.unitStats, type)?.UNIT_ABILITIES?.[
+        split.unitAbility
+      ])
+  const counts = new Map<UnitType, number>()
+  for (const id of [
+    ...s.participatingUnits,
+    ...s.nonParticipatingUnits,
+  ] as UnitId[]) {
+    if (split.from === 'space' && s.unitSurface[id] !== SPACE_SURFACE_ID)
+      continue
+    const type = model.unitType[id] ?? s.unitType[id]
+    if (divides(id, type)) counts.set(type, (counts.get(type) ?? 0) + 1)
+  }
+  // Units abilities place in space (G'hom Sek'kus) are committed from
+  // elsewhere: they land with the rest, within reinforcements, but can't
+  // stay in space.
+  const committed = new Map<UnitType, number>()
+  const room = new Map<UnitBaseType, number>()
+  const modelIds = [
+    ...model.participatingUnits,
+    ...model.nonParticipatingUnits,
+  ] as UnitId[]
+  const placements = split.from === 'space' ? s.optionMetadata?.placements : []
+  for (const [locator, count] of placements ?? []) {
+    const {
+      unitType: type,
+      baseType: base,
+      surfaceId,
+    } = parseUnitLocator(locator)
+    if (surfaceId !== SPACE_SURFACE_ID) continue
+    // The model holds a unit of each placed variant there.
+    const sample = modelIds.find(
+      id =>
+        model.unitType[id] === type &&
+        model.unitSurface[id] === SPACE_SURFACE_ID,
+    )
+    if (sample === undefined || !divides(sample, type)) continue
+    const left =
+      room.get(base) ??
+      Math.max(0, UNIT_LIMITS[base] - countUnitsByBaseType(s, base))
+    const placed = Math.min(count, left)
+    room.set(base, left - placed)
+    if (placed) committed.set(type, (committed.get(type) ?? 0) + placed)
+  }
+  // Variants the filter doesn't list follow their base type.
+  const listed = [...variants]
+  for (const type of new Set([...counts.keys(), ...committed.keys()])) {
+    if (listed.includes(type)) continue
+    const base = parseUnitLocator(type).baseType
+    const after = listed.findLastIndex(
+      variant => parseUnitLocator(variant).baseType === base,
+    )
+    listed.splice(after < 0 ? listed.length : after + 1, 0, type)
+  }
+  return listed.flatMap(variant => {
+    const fielded = counts.get(variant) ?? 0
+    const total = fielded + (committed.get(variant) ?? 0)
+    if (!total) return []
+    return [
+      ...planets.map(planet => option(variant, planet, total)),
+      ...(split.canStay && fielded
+        ? [option(variant, SPACE_SURFACE_ID, fielded)]
+        : []),
+    ]
+  })
+}
+
+/** One unqualified option per variant; a cap is the largest per-planet one,
+ *  since the choice applies to one planet's combat at a time. */
+function mergeSurfaces(items: readonly UnitOption[]): UnitOption[] {
+  const merged = new Map<UnitType, UnitOption>()
+  for (const item of items) {
+    const value = parseUnitLocator(item.value).unitType
+    const existing = merged.get(value)
+    if (!existing) {
+      merged.set(value, {
+        label: item.label,
+        value,
+        ...(item.max === undefined ? {} : { max: item.max }),
+      })
+    } else if (item.max !== undefined) {
+      existing.max = Math.max(existing.max ?? 0, item.max)
+    }
+  }
+  return [...merged.values()]
 }

@@ -107,7 +107,7 @@ There is one slot per kind of card — all agents are collected into `FACTION_AG
 
 `createGameData` collects each ability once per source into a `CollectedAbility`: the definition plus its registered `slot`, owning faction if any, and optional deployment metadata. `RegisteredAbility` is the definition plus `slot`, the shape used by engine lookups, reconcile, and the setup store. Presentation and eligibility remain in `GameData.slots`; collected abilities carry no `strategy`, `neutral`, or `display` fields.
 
-Shared decks register under slots with no strategy, faction-owned abilities under slots with a strategy; an ability no entry could ever show is a data error and throws. `getAvailableAbilities(side, faction)` walks the collected list in **registration order** and keeps abilities matching at least one slot entry's ownership and Neutral rules. The panel iterates `GameData.slots` in display order, matching available abilities by slot and owner. Category and subcategory titles, icon visibility, and title-based search all come directly from that config.
+Shared decks register under slots with no strategy, faction-owned abilities under slots with a strategy; an ability no entry could ever show is a data error and throws. `getAvailableAbilities(side, faction)` walks the collected list in **registration order** and keeps abilities matching at least one slot entry's ownership and Neutral rules. The panel iterates `GameData.slots` in display order, matching available abilities by slot and owner. With two or more planets it shows Bombardment and Commit Ground Forces under GENERAL, since their planet splits matter then (`layoutPlanetSplits`). Category and subcategory titles, icon visibility, and title-based search all come directly from that config.
 
 The one exception is the catch-all: an ability that no entry shows, but that another faction can reach across the table with (an `external` invoke), is appended to the `OTHER` slot with its owner's icon. Systems opt out by not declaring `OTHER` — Twilight's Fall has no such slot.
 
@@ -241,37 +241,67 @@ export const theAlastor: Ability = {
 ```
 
 Setup runs the changes of every active ability (enabled, with its `headerUI`
-param set) in registration order, attacker first, against a model holding one
-stand-in unit of every type on every surface, then keeps the stand-ins on
-surfaces their type may stand on. Reconcile stores that model as
-`optionMetadata.standIns`, and setup reads it like any combat state:
+param set), attacker first, against a model holding the fielded units of both
+sides. Reconcile stores that model as `optionMetadata.model`, and setup reads it
+like any combat state:
 
 - **Placement** — `ALLOWED_SURFACES` (Miniaturization, Nekro unit copies).
-- **Option lists** — unit categories (Eidolon Maximum, Hel-Titan) and grants
-  (Alastor, Z-Grav Eidolon, Matriarch). A stand-in stands for every unit of
-  its type on its surface, placed or not; placed units only supply counts and
-  caps.
+- **Option lists** — unit categories (Eidolon Maximum, Hel-Titan), grants
+  (Alastor, Z-Grav Eidolon, Matriarch) and the units an ability may place.
+  Lists of units that fight show only the units the model holds; fielded units
+  alone supply counts and caps.
+
+An ability that may place units declares them with `placeUnits` in its changes
+(Brother Milor, Indoctrination, Overwing Zeta, Sleeper Cell, …):
+
+```typescript
+declareChanges: ctx => {
+  ctx.api.own.placeUnits({ FIGHTER: 2 }, SPACE_SURFACE_ID)
+},
+```
+
+In setup, `placeUnits` only makes each variant present on the surface: it adds
+one unit where none stands yet and the unit limit leaves room, enforces nothing
+else, and places nothing for an ability whose `context` is the other combat
+mode. The counts asked for are kept apart, in `optionMetadata.placements`
+(only Commit Ground Forces' split reads them, see
+[Per-planet choices](#per-planet-choices)). Declare what the ability may
+place, even if it might not: listing a unit that never arrives is harmless,
+while a placed unit missing from the lists takes hits last and can't sustain.
+Changes run in passes until one places nothing new, so a change sees units
+declared by abilities registered after it and by the opponent (Sleeper Cell
+captures the opponent's ship types).
 
 The engine never runs `declareChanges` on its own. An invoke applying the same
 effect calls `ctx.invokeChanges()` (params default to the ability's current
-config) instead of repeating the code. TF Hel-Titan keeps its plain stats
-invoke for Janovet and declares `declareChanges: statsInvoke.call` instead.
+config) instead of repeating the code; there `placeUnits` places for real. TF
+Hel-Titan keeps its plain stats invoke for Janovet and declares
+`declareChanges: statsInvoke.call` instead.
 
 - Put in `declareChanges` only what setup must see; keep combat-only or
   conditional effects in the invoke (Z-Grav Eidolon's change grants SHIPS to
   the mechs in space; its START_OF_COMBAT invoke also rewrites combat values).
-- Changes see stand-ins: don't count units or rely on which units exist, and
-  don't place, move or remove units, add subtypes, write ability config, or
-  check `isEnabled` (setup already gates on it).
-- A change that reads what another change sets must register after it (Nekro's
-  unit copies precede its flagship's Alastor).
+- Changes see the fielded and declared units, not the combat that follows:
+  don't move or remove units, write ability config, or check `isEnabled`
+  (setup already gates on it). Add a subtype only when it replaces fielded
+  units before combat (Galvanized Units marks its chosen units, so the
+  Commit Ground Forces and Bombardment splits list them apart); its PREPARE
+  applies the same subtype for real.
+- An invoke whose placement matches the declaration calls
+  `ctx.invokeChanges()` instead of repeating it (Brother Milor, Overwing Zeta,
+  Dunlain Reaper after removing its infantry). Call `placeUnits` directly only
+  when the invoke needs the placed ids or a surface setup can't know
+  (Indoctrination, Moyin's Ashes).
 - Declaring changes moves the ability's PREPARE ahead of other PREPAREs, so
   unit copies and transformations set stats before Capacity and Fleet Pool
   enforce.
 - A copier runs its target's changes as the target:
   `withRunningAbility(ctx, target, () => ctx.invokeChanges(params))`
-  (Technological Singularity, which then restores placement surfaces because
-  the copy is gained mid-combat).
+  (Technological Singularity, Ssruu, Clever Genome; Technological
+  Singularity then restores placement surfaces because the copy is gained
+  mid-combat). Forward only changes that still matter once the copy is
+  gained: TF Singularity forwards none, since the Abilities that declare
+  changes act before it can trigger.
 
 ## Timing System
 
@@ -280,6 +310,7 @@ Timings define when abilities fire. They run in this order during combat:
 ```
 PREPARE               — once at combat construction
 COMMIT_UNITS          — during COMMIT_UNITS phase (ground combat unit commitment)
+COMMIT_UNITS_STEP     — the Commit Ground Forces driver lands ground forces
 START_OF_COMBAT       — before first round
 START_OF_COMBAT_ROUND — before each round (including first)
 BEFORE_UNIT_ABILITY_ROLL — before AFB / bombardment / space cannon dice
@@ -486,7 +517,9 @@ Native `UnitStats.CATEGORIES` defaults to the base type's categories.
 Participation follows categories alone: ships (native or granted) join space
 combat wherever they stand in the system, and ground forces join ground combat
 on the invaded planet (the attacker's are committed there from space),
-including newly placed units. Hel-Titans natively belong to both `STRUCTURES`
+including newly placed units. A multi-planet invasion moves the active
+surface: bombardment and commitment use the first planet, then each planet's
+Space Cannon Defense and ground combat run with that planet active. Hel-Titans natively belong to both `STRUCTURES`
 and `GROUND_FORCES`; Eidolon Maximum mechs are ships and ground forces, so one
 on a planet fights in space combat too.
 
@@ -839,14 +872,21 @@ uiConfig: (ctx, params) => {
 }
 ```
 
-There are exactly four UI config item types. The list variants are all expressed as `unit-list` with a `mode`:
+There are five UI config item types. The list variants are all expressed as `unit-list` with a `mode`:
 
-| Type        | Param Type                | Use Case                                                      |
-| ----------- | ------------------------- | ------------------------------------------------------------- |
-| `checkbox`  | `boolean`                 | Toggle                                                        |
-| `number`    | `number`                  | Counter with optional `min`/`max`                             |
-| `select`    | `string`                  | Dropdown (`items: SelectItem[] \| SelectGroup[]`)             |
-| `unit-list` | `UnitList<V>` (see below) | List of units; behavior set by `mode` (+ optional `sortable`) |
+| Type         | Param Type                | Use Case                                                      |
+| ------------ | ------------------------- | ------------------------------------------------------------- |
+| `checkbox`   | `boolean`                 | Toggle                                                        |
+| `number`     | `number`                  | Counter with optional `min`/`max`                             |
+| `select`     | `string`                  | Dropdown (`items: SelectItem[] \| SelectGroup[]`)             |
+| `unit-list`  | `UnitList<V>` (see below) | List of units; behavior set by `mode` (+ optional `sortable`) |
+| `unit-split` | `UnitList<number>`        | A slider per unit type dividing a `split` param's units       |
+
+`unit-split` takes the items of a `split` param
+(`getUnitVariantsOptions(key)`): one slider per unit type whose units have
+more than one place to go, each thumb the border between two surfaces. A
+thumb stops where a surface would exceed its item's `max`. The control is
+hidden when no type has.
 
 `unit-list` modes:
 
@@ -920,16 +960,35 @@ confined to one surface. `source` still selects categories; `side`, `filter`,
 `sort`, and `limit` still apply.
 
 `getUnitVariantsOptions(paramKey)` and reconciliation use the same resolver.
-Scoped options have a `UnitLocator` key and surface metadata. All eligible types
-are offered even when none are fielded yet, so later placements inherit their
-configured priorities. Participating choices use the active combat surface;
-setup declarations can expose additional surfaces. System choices use every
-legal surface. Explicit availability filters and count limits still apply.
-Reconciliation keeps participating list entries for every surface of the
-param's mode (each planet for `GROUND`), so settings for an unselected planet
-survive planet and mode switches while the control shows only the active one.
+Scoped options have a `UnitLocator` key and surface metadata. They offer only
+the units the setup model holds: fielded units and those active abilities may
+place (see [Setup changes](#setup-changes)). Participating choices use the
+active combat surface; setup grants can expose additional surfaces. In ground
+mode they are made by unit type (plain variant keys, no surface): each ground
+combat is fought on one planet, so a choice applies on every planet. Only a combat drawing participants from several surfaces (space
+combat with Alastor or Eidolon Maximum) and system choices keep the
+surface. System
+choices use every surface a unit stands on. Explicit availability filters and
+count limits still apply. `scope: 'type'` choices (reinforcements) offer every
+type of the category. Reconciliation keeps participating list entries for every
+surface of the param's mode (each planet for `GROUND`), so settings for an
+unselected planet survive planet and mode switches while the control shows only
+the active one. It also keeps the entries of units no longer offered, hidden,
+so a unit removed and placed again gets its settings back; share links carry
+only the offered entries.
 Single choices follow the active surface and keep their unit type when the
-planet changes. Give every participating param a `filter.combatMode`; without
+planet changes; ground choices, made by type, need no move.
+`sort: 'combat-desc'` (`'combat-asc'`) orders options by the expected hits of
+their combat roll, strongest (weakest) first, with worth breaking ties; it
+reads the setup model's stats, so upgrades and declared changes count. A
+single choice under a combat sort picks automatically until the user picks:
+while it holds the declared default or the value reconcile last chose
+(`CombatSetup` tracks it), reconcile moves it to the first option, on its
+surface while one is offered there. A picked unit sticks while offered and
+falls back to the first option when it leaves (Viscount Unlenn and Evelyn
+DeLouis pick the strongest unit, Cavalry the weakest). Render such a select
+with the options as returned; don't reverse them.
+Give every participating param a `filter.combatMode`; without
 one, the other mode resolves a different catalog and reconcile resets it.
 Ordered controls stay flat and suffix duplicate names with their surface.
 Independent controls are grouped by surface only when a unit type appears on
@@ -942,7 +1001,7 @@ active planet; the build-time clamp uses the same caps.
 the ability declaring the param, matched by key so re-keyed copies keep
 working. Exotrireme's sacrifice list uses it, so every dreadnought carrying
 the text and The Faces of Janovet (which copies it) can be picked. Setup never
-runs PREPARE, so the filter reads the stand-ins: an ability attached to units
+runs PREPARE, so the filter reads the setup model: an ability attached to units
 at PREPARE must also be attached by a `declareChanges` to be offered. Reconcile
 lists the holders as if the ability were switched on and its unit upgraded (an
 ability in a unit's `FACTION_<UNIT>` slot counts that unit), so the control
@@ -963,7 +1022,66 @@ entries like `getFlat` and compiles each list object once, so never mutate a
 to retain location in subsequent queries.
 Subtype declarations use plain `unitType` plus optional `surfaces` metadata.
 
-Setup changes extend these choices through their grants: a stand-in granted
-the mode's category counts on its own surface (Alastor), and the attacker's
+### Per-planet choices
+
+`scope: 'planet'` divides the side's units between the planets of the system
+by its `split: UnitSplit` (required), with `UnitLocator` keys
+(`@planet-2/INFANTRY`). A ground invasion fights over every planet, so each
+receives what the list sends it; the runtime reads the invaded planets with
+`foughtPlanetIds(ctx.state)` (`abilities-engine/unit-options.ts`) and puts
+units listed for a planet outside the invasion on the first one. A subtype
+never inherits its parent's count.
+
+`from: 'space'` counts units in space (commitment), `from: 'system'` every
+unit (`unitAbility` narrows them, Bombardment's `'BOMBARDMENT'`); `canStay`
+adds a `@space` entry for units kept back. Each planet item's `max` is its
+variant's unit count, and reconcile keeps every variant's counts adding up to
+it: new units go to the first planet, surplus leaves space first, then the
+last planets. Show it with `unit-split`. At runtime `splitUnits(ctx, list,
+ids)` (`abilities-engine/api/split-units.ts`) returns the planets and the
+units each receives, putting units the list doesn't cover on the first planet.
+
+Units an active ability places in space (its `declareChanges` counts, see
+[Setup changes](#setup-changes)) are committed from elsewhere. G'hom Sek'kus
+places its units in space at `COMMIT_UNITS`, so a `from: 'space'` split adds
+them to the units there (within reinforcements). They can only land, though:
+the `@space` item's `max` is the number of units standing in space (no item
+when none does), reconcile and the slider keep the space count within it, and
+the Commit Ground Forces driver lands the newest units first. A new ability
+that commits extra units only needs to place them in space at `COMMIT_UNITS`
+and declare that placement.
+
+`resolveStep(meta, { surfaceId, units })` resolves a unit ability against a
+planet with only the given units rolling: the planet becomes active (targets,
+Planetary Shield) before the roll and stays so. Calls run last-pushed first,
+so push planets in reverse (Bombardment's driver).
+
+Setup changes extend these choices through their grants: a unit granted the
+mode's category counts on its own surface (Alastor), and the attacker's
 granted ground forces in space are committed onto the active planet
-(Matriarch/Morphwing). The preview never grants runtime participation.
+(Matriarch/Morphwing), which also lists them in Commit Ground Forces'
+split. The preview never grants runtime participation.
+
+### Uses per planet
+
+Any ability with limited uses that it spends on a specific planet gets a
+"Uses per planet" control in a multi-planet invasion, with no
+ability code. An ability qualifies when one of its use-spending (non-`system`)
+invokes runs during a planet's turn rather than once for the system:
+`PREPARE`, `COMMIT_UNITS`, `COMMIT_UNITS_STEP`, `BOMBARDMENT_STEP` and the
+space-only steps don't count, so Blitz has no control; read-only and
+SPACE-context abilities never qualify (`spendsUsesOnPlanet` in
+`combat-state/planet-uses.ts`). The caps live in the generic `planetUses` param
+(`[SurfaceId, number][]`, next to `isEnabled` and `uses`); a planet without
+an entry is not limited, and a cap is a maximum, not a reservation: uses a
+planet leaves carry on to the planets after it. While a planet is active
+(its bombardment, Space Cannon Defense and ground combat) the ability's
+`params.uses` is what that planet may still spend, so invokes and dice
+modifiers need nothing planet-aware. The control (a number `List` with
+`optional` counts) steps a cap up from 0 to `uses`, then to no limit (an empty
+field); an ability with a fixed single use (default `uses: 1` and no `uses`
+control in its header or config, e.g. Fire Team) gets a checkbox per planet
+titled "Use on planets" instead (checked = allowed, unchecked = cap 0).
+Editable uses (Morale Boost) always get the counts. It renders first in the
+ability's config, whenever the uses are finite. Reconcile drops caps of missing planets and of abilities that don't qualify,
+and lowers caps above `uses`.

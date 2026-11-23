@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
+import { CombatSetup } from '@/hooks/combat-setup'
+import { SPACE_SURFACE_ID } from '@/types'
+
 import { combatTest } from '../utils/combat-test'
+import { hitOrderUnits, setAbility, setupOptions } from '../utils/setup-options'
+import { PLANET_1, PLANET_2 } from '../utils/surface-units'
 
 describe('GHOM_SEKKUS', () => {
   it('adds configured units during COMMIT_UNITS', () => {
@@ -93,5 +98,46 @@ describe('GHOM_SEKKUS', () => {
       u.subtypes?.includes('Galvanized'),
     )
     expect(galvanized).toHaveLength(2)
+  })
+
+  it('declares the committed units for the hit order', () => {
+    const setup = new CombatSetup()
+    setup.setFaction('attacker', 'SARDAKK_NORR')
+    setup.setCombatMode('GROUND')
+    setup.setUnitCount('attacker', 'INFANTRY', 1)
+    const mech = 'MECH'
+    setAbility(setup, 'attacker', 'GHOM_SEKKUS', { isEnabled: true })
+    expect(hitOrderUnits(setup, 'GROUND')).not.toContain(mech)
+
+    setAbility(setup, 'attacker', 'GHOM_SEKKUS', {
+      units: [
+        ['MECH', 1],
+        ['INFANTRY', 0],
+      ],
+    })
+    expect(hitOrderUnits(setup, 'GROUND')).toContain(mech)
+  })
+
+  it('offers one count per type within the reinforcements left', () => {
+    const setup = new CombatSetup('FULL')
+    setup.setCombatMode('GROUND')
+    setup.addPlanet()
+    setup.setSurfaceUnitCount('attacker', SPACE_SURFACE_ID, 'MECH', 1)
+    setup.setSurfaceUnitCount('defender', PLANET_1, 'INFANTRY', 1)
+    setup.setSurfaceUnitCount('defender', PLANET_2, 'INFANTRY', 1)
+    setAbility(setup, 'attacker', 'GHOM_SEKKUS', {
+      isEnabled: true,
+      units: [['MECH', 5]],
+    })
+
+    const mech = setupOptions(setup, 'GHOM_SEKKUS', 'units').find(
+      item => item.value === 'MECH',
+    )
+    // Three mechs are left in reinforcements.
+    expect(mech?.max).toBe(3)
+    const counts = new Map(
+      setup.abilities.attacker.GHOM_SEKKUS.units as [string, number][],
+    )
+    expect(counts.get('MECH')).toBe(3)
   })
 })
